@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">Goal Reacher</string>
+    <string name="accessibility_service_description">Goal Reacher Scroll Shield monitors YouTube Shorts to protect you from infinite scrolling and enforce your study blocks.</string>
+</resources>
