@@ -1,5 +1,7 @@
 # Goal Reacher (Scroll Stopper) 🚀
 
+![Goal Reacher Dashboard Mockup](images/goal_reacher_ui.png)
+
 **Goal Reacher** is a native Android application designed to help students and aspirants prepare for competitive exams. It functions as a gamified study companion, integrating a week-by-week roadmap planner, customizable daily study blocks, performance analytics, and a powerful **Scroll-Stopper Accessibility Service** that shields users from endless social media scroll addiction (e.g. YouTube Shorts).
 
 ---
