@@ -284,6 +284,24 @@ fun AlertsScreen(
                         }
                     }
 
+                    if (isActive) {
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(Color(0xFFEF4444).copy(alpha = 0.08f))
+                                .padding(10.dp)
+                        ) {
+                            Text(
+                                text = "⚠️ Paytm/Banking Warning: Payment apps block transactions while third-party accessibility tools are active. If Paytm displays a security error, tap 'Configure' above and temporarily turn off Goal Reacher.",
+                                fontSize = 11.sp,
+                                color = Color(0xFFFCA5A5),
+                                lineHeight = 15.sp
+                            )
+                        }
+                    }
+
                     Spacer(modifier = Modifier.height(14.dp))
                     Divider(color = Color.White.copy(alpha = 0.08f))
                     Spacer(modifier = Modifier.height(14.dp))

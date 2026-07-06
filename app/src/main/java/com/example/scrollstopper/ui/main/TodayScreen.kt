@@ -165,6 +165,69 @@ fun TodayScreen(
             }
         }
 
+        // Accessibility Quick-Toggle Helper Card
+        item {
+            val context = LocalContext.current
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable {
+                        try {
+                            val intent = android.content.Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS)
+                            context.startActivity(intent)
+                        } catch (e: Exception) {
+                            // Fallback
+                        }
+                    },
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = if (state.isAccessibilityActive) {
+                        Color(0xFF065F46).copy(alpha = 0.15f) // Emerald tinted dark green
+                    } else {
+                        Color(0xFF991B1B).copy(alpha = 0.15f) // Ruby tinted dark red
+                    }
+                ),
+                border = BorderStroke(
+                    width = 1.dp,
+                    color = if (state.isAccessibilityActive) {
+                        Color(0xFF10B981).copy(alpha = 0.3f)
+                    } else {
+                        Color(0xFFEF4444).copy(alpha = 0.3f)
+                    }
+                )
+            ) {
+                Row(
+                    modifier = Modifier.padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Text(
+                        text = if (state.isAccessibilityActive) "🛡️" else "⚠️",
+                        fontSize = 24.sp
+                    )
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = if (state.isAccessibilityActive) "Scroll Shield is Active" else "Scroll Shield is Paused",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 14.sp,
+                            color = Color.White
+                        )
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = if (state.isAccessibilityActive) {
+                                "Paying with Paytm? Tap here to temporarily disable the accessibility service to avoid blocks."
+                            } else {
+                                "Tap here to enable focus protection in Android Accessibility Settings for your study blocks."
+                            },
+                            fontSize = 11.sp,
+                            color = Color.White.copy(alpha = 0.7f),
+                            lineHeight = 15.sp
+                        )
+                    }
+                }
+            }
+        }
+
         // Daily Quote Card
         item {
             Card(

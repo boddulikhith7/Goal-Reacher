@@ -126,34 +126,31 @@ class ScrollStopperAccessibilityService : AccessibilityService() {
     private fun detectShorts(node: AccessibilityNodeInfo?): Boolean {
         if (node == null) return false
 
-        // Check resource IDs commonly used by YouTube Shorts
+        // Check resource IDs commonly used by YouTube Shorts video players and containers
         val viewId = node.viewIdResourceName
         if (viewId != null && (
             viewId.contains("reel_watch_fragment") ||
             viewId.contains("reel_recycler") ||
             viewId.contains("reel_container") ||
             viewId.contains("shorts_player") ||
-            viewId.contains("reel_watch_layout")
+            viewId.contains("reel_watch_layout") ||
+            viewId.contains("shorts_video_player")
         )) {
-            return true
-        }
-
-        // Check text or content description for "Shorts" or "Reels"
-        val contentDesc = node.contentDescription?.toString()
-        if (contentDesc != null && (contentDesc.equals("Shorts", ignoreCase = true) || contentDesc.contains("Reels"))) {
-            return true
-        }
-
-        val text = node.text?.toString()
-        if (text != null && text.equals("Shorts", ignoreCase = true)) {
-            return true
+            // Exclude bottom navigation bar items
+            if (!viewId.contains("pivot_bar") && !viewId.contains("navigation")) {
+                return true
+            }
         }
 
         // Recursively check children
         for (i in 0 until node.childCount) {
             val child = node.getChild(i)
-            if (detectShorts(child)) {
-                return true
+            if (child != null) {
+                val isShortsChild = detectShorts(child)
+                child.recycle()
+                if (isShortsChild) {
+                    return true
+                }
             }
         }
 
