@@ -41,6 +41,32 @@ data class StudyBlockState(
     val isCompleted: Boolean
 )
 
+data class TimetableBlock(
+    val id: String,
+    val label: String,
+    val timeRange: String,
+    val xpValue: Int = 20,
+    val isCompleted: Boolean = false
+) {
+    fun serialize(): String {
+        return "$id|$label|$timeRange|$xpValue|$isCompleted"
+    }
+
+    companion object {
+        fun deserialize(str: String): TimetableBlock? {
+            val parts = str.split("|")
+            if (parts.size < 5) return null
+            return TimetableBlock(
+                id = parts[0],
+                label = parts[1],
+                timeRange = parts[2],
+                xpValue = parts[3].toIntOrNull() ?: 20,
+                isCompleted = parts[4].toBoolean()
+            )
+        }
+    }
+}
+
 data class ErrorLogItem(
     val id: String,
     val topic: String,

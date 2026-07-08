@@ -59,11 +59,14 @@ class PreferenceManager(private val context: Context) {
             val yesterday = getYesterdayString()
             // Check if streak was maintained yesterday
             val yesterdayCompleted = prefs.getStringSet(KEY_COMPLETED_BLOCKS, emptySet()) ?: emptySet()
-            val completedBoth = yesterdayCompleted.contains("BLOCK1") && yesterdayCompleted.contains("BLOCK2")
+            
+            val totalCount = customBlocks.size
+            val completedCount = yesterdayCompleted.size
+            val completedDiscipline = if (totalCount >= 2) completedCount >= 2 else (totalCount > 0 && completedCount == totalCount)
 
             val currentStreak = streak
             if (savedDate == yesterday) {
-                if (!completedBoth) {
+                if (!completedDiscipline) {
                     // Broke the streak yesterday
                     setStreakInternal(0)
                 }
@@ -71,6 +74,11 @@ class PreferenceManager(private val context: Context) {
                 // More than a day gap, streak broken
                 setStreakInternal(0)
             }
+
+            // Reset isCompleted flags inside customBlocks list for the new day
+            val list = customBlocks.map { it.copy(isCompleted = false) }
+            val serialized = list.joinToString("::") { it.serialize() }
+            prefs.edit().putString("custom_timetable_blocks", serialized).apply()
 
             // Reset daily variables
             prefs.edit()
@@ -323,4 +331,105 @@ class PreferenceManager(private val context: Context) {
             val serialized = value.joinToString("::") { it.serialize() }
             prefs.edit().putString("custom_syllabus_list", serialized).apply()
         }
+
+    // Dynamic Study Blocks (Fully Customizable Timetable List)
+    var customBlocks: List<TimetableBlock>
+        get() {
+            val raw = prefs.getString("custom_timetable_blocks", "") ?: ""
+            if (raw.isEmpty()) {
+                val defaults = listOf(
+                    TimetableBlock("1", "Block 1 (Theory)", "6:00 AM - 8:00 AM", 20, false),
+                    TimetableBlock("2", "Block 2 (Practice)", "6:00 PM - 8:30 PM", 20, false),
+                    TimetableBlock("3", "Block 3 (Rotation)", "9:00 PM - 10:00 PM", 10, false)
+                )
+                val serialized = defaults.joinToString("::") { it.serialize() }
+                prefs.edit().putString("custom_timetable_blocks", serialized).apply()
+                return defaults
+            }
+            return raw.split("::").mapNotNull { TimetableBlock.deserialize(it) }
+        }
+        set(value) {
+            val serialized = value.joinToString("::") { it.serialize() }
+            prefs.edit().putString("custom_timetable_blocks", serialized).apply()
+            
+            // Sync back to legacy variables for compatibility (e.g. AlarmReceiver notifications)
+            if (value.isNotEmpty()) {
+                prefs.edit().putString("block1_label", value[0].label).putString("block1_time", value[0].timeRange).apply()
+            }
+            if (value.size >= 2) {
+                prefs.edit().putString("block2_label", value[1].label).putString("block2_time", value[1].timeRange).apply()
+            }
+            if (value.size >= 3) {
+                prefs.edit().putString("block3_label", value[2].label).putString("block3_time", value[2].timeRange).apply()
+            }
+            
+            com.example.scrollstopper.widget.StreakWidgetProvider.triggerUpdate(context)
+        }
+
+    fun toggleCustomBlockCompleted(id: String, xpValue: Int) {
+        checkDayTransition()
+        val current = completedBlocks.toMutableSet()
+        val isChecking = !current.contains(id)
+
+        if (isChecking) {
+            current.add(id)
+            xp += xpValue
+        } else {
+            current.remove(id)
+            xp = (xp - xpValue).coerceAtLeast(0)
+        }
+        completedBlocks = current
+
+        // Also update customBlocks list isCompleted flag
+        val list = customBlocks.toMutableList()
+        val idx = list.indexOfFirst { it.id == id }
+        if (idx != -1) {
+            list[idx] = list[idx].copy(isCompleted = isChecking)
+            val serialized = list.joinToString("::") { it.serialize() }
+            prefs.edit().putString("custom_timetable_blocks", serialized).apply()
+        }
+
+        // Recalculate streak contribution instantly
+        val completedCount = current.size
+        val totalCount = list.size
+        val completedDiscipline = if (totalCount >= 2) completedCount >= 2 else (totalCount > 0 && completedCount == totalCount)
+        val todayStreakCounted = prefs.getBoolean(KEY_TODAY_STREAK_COUNTED, false)
+
+        if (completedDiscipline && !todayStreakCounted) {
+            setStreakInternal(streak + 1)
+            prefs.edit().putBoolean(KEY_TODAY_STREAK_COUNTED, true).apply()
+        } else if (!completedDiscipline && todayStreakCounted) {
+            setStreakInternal((streak - 1).coerceAtLeast(0))
+            prefs.edit().putBoolean(KEY_TODAY_STREAK_COUNTED, false).apply()
+        }
+    }
+
+    fun addTimetableBlock(label: String, timeRange: String, xp: Int) {
+        val current = customBlocks.toMutableList()
+        val newId = System.currentTimeMillis().toString()
+        current.add(TimetableBlock(newId, label, timeRange, xp, false))
+        customBlocks = current
+    }
+
+    fun deleteTimetableBlock(id: String) {
+        val current = customBlocks.toMutableList()
+        current.removeAll { it.id == id }
+        customBlocks = current
+
+        val completed = completedBlocks.toMutableSet()
+        if (completed.contains(id)) {
+            completed.remove(id)
+            completedBlocks = completed
+        }
+    }
+
+    fun updateTimetableBlock(id: String, label: String, timeRange: String, xp: Int) {
+        val current = customBlocks.toMutableList()
+        val index = current.indexOfFirst { it.id == id }
+        if (index != -1) {
+            val oldBlock = current[index]
+            current[index] = oldBlock.copy(label = label, timeRange = timeRange, xpValue = xp)
+            customBlocks = current
+        }
+    }
 }

@@ -33,6 +33,7 @@ import com.example.scrollstopper.data.BlockType
 import com.example.scrollstopper.data.QuotesData
 import com.example.scrollstopper.data.ScheduleData
 import com.example.scrollstopper.data.WeekPlan
+import com.example.scrollstopper.data.TimetableBlock
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
@@ -440,28 +441,26 @@ fun TodayScreen(
             )
         }
 
-        // 3 Quest Block Cards
-        val blocks = listOf(
-            Triple(BlockType.BLOCK1, "Theory Block", weekPlan.block1Source),
-            Triple(BlockType.BLOCK2, "Practice Block", weekPlan.block2Source),
-            Triple(
-                BlockType.BLOCK3,
-                "Rotation Block",
-                when (Calendar.getInstance().get(Calendar.DAY_OF_WEEK)) {
+        // Quest Block Cards
+        items(state.customBlocks.size) { index ->
+            val block = state.customBlocks[index]
+            val isDone = state.completedBlocks.contains(block.id)
+            val detailSource = when (index) {
+                0 -> "Topic: ${weekPlan.topic}\nSource: ${weekPlan.block1Source}"
+                1 -> "Solve topic-wise questions.\nPortal: ${weekPlan.block2Source}"
+                2 -> when (Calendar.getInstance().get(Calendar.DAY_OF_WEEK)) {
                     Calendar.MONDAY, Calendar.WEDNESDAY, Calendar.FRIDAY -> "Python Programming (Mon/Wed/Fri)"
                     Calendar.TUESDAY, Calendar.THURSDAY -> "Internship Preparation & Emails (Tue/Thu)"
                     Calendar.SATURDAY -> "Weekly Full Syllabus Test (Sat)"
                     else -> "Mock Test Postmortem / Rest (Sun)"
                 }
-            )
-        )
+                else -> "Custom study session. Focus on active study roadmap."
+            }
 
-        items(blocks) { (type, label, source) ->
-            val isDone = state.completedBlocks.contains(type.name)
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clickable { viewModel.toggleBlock(type) },
+                    .clickable { viewModel.toggleCustomBlock(block.id, block.xpValue) },
                 shape = RoundedCornerShape(12.dp),
                 colors = CardDefaults.cardColors(
                     containerColor = if (isDone) Color(0xFF065F46) else Color.White.copy(alpha = 0.05f)
@@ -481,30 +480,26 @@ fun TodayScreen(
                     Spacer(modifier = Modifier.width(16.dp))
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = when (type) {
-                                BlockType.BLOCK1 -> state.block1Label + " • " + state.block1Time
-                                BlockType.BLOCK2 -> state.block2Label + " • " + state.block2Time
-                                BlockType.BLOCK3 -> state.block3Label + " • " + state.block3Time
-                            },
+                            text = block.timeRange,
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Bold,
                             color = if (isDone) Color.White else Color(0xFFA78BFA)
                         )
                         Text(
-                            text = label,
+                            text = block.label,
                             fontSize = 15.sp,
                             fontWeight = FontWeight.Bold,
                             color = Color.White
                         )
                         Text(
-                            text = source,
+                            text = detailSource,
                             fontSize = 11.sp,
                             color = Color.White.copy(alpha = 0.7f),
                             lineHeight = 16.sp
                         )
                     }
                     Text(
-                        text = "+${type.xpValue} XP",
+                        text = "+${block.xpValue} XP",
                         fontSize = 14.sp,
                         fontWeight = FontWeight.Bold,
                         color = Color.White
@@ -515,7 +510,13 @@ fun TodayScreen(
                             modifier = Modifier
                                 .clip(RoundedCornerShape(8.dp))
                                 .background(Color.White.copy(alpha = 0.08f))
-                                .clickable { activeTimerBlock = type }
+                                .clickable { 
+                                    activeTimerBlock = when (index) {
+                                        0 -> BlockType.BLOCK1
+                                        1 -> BlockType.BLOCK2
+                                        else -> BlockType.BLOCK3
+                                    }
+                                }
                                 .padding(8.dp),
                             contentAlignment = Alignment.Center
                         ) {

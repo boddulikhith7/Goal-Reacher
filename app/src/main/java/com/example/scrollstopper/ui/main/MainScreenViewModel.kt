@@ -8,6 +8,7 @@ import com.example.scrollstopper.data.BlockType
 import com.example.scrollstopper.data.ErrorLogItem
 import com.example.scrollstopper.data.PreferenceManager
 import com.example.scrollstopper.data.WeekPlan
+import com.example.scrollstopper.data.TimetableBlock
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -31,12 +32,7 @@ data class MainUiState(
     val examDateMillis: Long = 0L,
     val geminiApiKey: String = "",
     val customSyllabus: List<WeekPlan> = emptyList(),
-    val block1Label: String = "Block 1 (Theory)",
-    val block1Time: String = "6:00 AM - 8:00 AM",
-    val block2Label: String = "Block 2 (Practice)",
-    val block2Time: String = "6:00 PM - 8:30 PM",
-    val block3Label: String = "Block 3 (Rotation)",
-    val block3Time: String = "9:00 PM - 10:00 PM"
+    val customBlocks: List<TimetableBlock> = emptyList()
 )
 
 class MainScreenViewModel(application: Application) : AndroidViewModel(application) {
@@ -69,18 +65,18 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
                 examDateMillis = prefManager.examDateMillis,
                 geminiApiKey = prefManager.geminiApiKey,
                 customSyllabus = prefManager.customSyllabus,
-                block1Label = prefManager.block1Label,
-                block1Time = prefManager.block1Time,
-                block2Label = prefManager.block2Label,
-                block2Time = prefManager.block2Time,
-                block3Label = prefManager.block3Label,
-                block3Time = prefManager.block3Time
+                customBlocks = prefManager.customBlocks
             )
         }
     }
 
     fun toggleBlock(blockType: BlockType) {
         prefManager.toggleBlockCompleted(blockType)
+        refreshState()
+    }
+
+    fun toggleCustomBlock(id: String, xpValue: Int) {
+        prefManager.toggleCustomBlockCompleted(id, xpValue)
         refreshState()
     }
 
@@ -140,21 +136,18 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
         refreshState()
     }
 
-    fun updateBlockConfig(blockNum: Int, label: String, timeRange: String) {
-        when (blockNum) {
-            1 -> {
-                prefManager.block1Label = label
-                prefManager.block1Time = timeRange
-            }
-            2 -> {
-                prefManager.block2Label = label
-                prefManager.block2Time = timeRange
-            }
-            3 -> {
-                prefManager.block3Label = label
-                prefManager.block3Time = timeRange
-            }
-        }
+    fun addTimetableBlock(label: String, timeRange: String, xp: Int) {
+        prefManager.addTimetableBlock(label, timeRange, xp)
+        refreshState()
+    }
+
+    fun deleteTimetableBlock(id: String) {
+        prefManager.deleteTimetableBlock(id)
+        refreshState()
+    }
+
+    fun updateTimetableBlock(id: String, label: String, timeRange: String, xp: Int) {
+        prefManager.updateTimetableBlock(id, label, timeRange, xp)
         refreshState()
     }
 

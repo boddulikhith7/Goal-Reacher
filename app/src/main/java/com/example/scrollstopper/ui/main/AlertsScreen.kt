@@ -31,6 +31,7 @@ import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import com.example.scrollstopper.ScrollStopperAccessibilityService
 import com.example.scrollstopper.data.BlockType
+import com.example.scrollstopper.data.TimetableBlock
 import com.example.scrollstopper.notifications.AlarmReceiver
 import java.util.Calendar
 
@@ -401,18 +402,11 @@ fun AlertsScreen(
             }
         }
 
-        // Quest & Timetable Editor card
+        // Quest Settings Card
         item {
             var tempQuestName by remember(state.questName) { mutableStateOf(state.questName) }
             var tempApiKey by remember(state.geminiApiKey) { mutableStateOf(state.geminiApiKey) }
             
-            var b1Label by remember(state.block1Label) { mutableStateOf(state.block1Label) }
-            var b1Time by remember(state.block1Time) { mutableStateOf(state.block1Time) }
-            var b2Label by remember(state.block2Label) { mutableStateOf(state.block2Label) }
-            var b2Time by remember(state.block2Time) { mutableStateOf(state.block2Time) }
-            var b3Label by remember(state.block3Label) { mutableStateOf(state.block3Label) }
-            var b3Time by remember(state.block3Time) { mutableStateOf(state.block3Time) }
-
             // Target Date configuration (Format: YYYY-MM-DD)
             val sdf = remember { java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault()) }
             var tempDateStr by remember(state.examDateMillis) {
@@ -426,13 +420,13 @@ fun AlertsScreen(
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text(
-                        text = "⚙️ Quest Settings & Timetable Editor",
+                        text = "⚙️ Quest & API Configuration",
                         fontSize = 15.sp,
                         fontWeight = FontWeight.Bold,
                         color = Color.White
                     )
                     Text(
-                        text = "Customize the app title, countdown, and daily study blocks.",
+                        text = "Customize the app title, countdown, and Gemini API credentials.",
                         fontSize = 11.sp,
                         color = Color.White.copy(alpha = 0.5f),
                         modifier = Modifier.padding(bottom = 12.dp)
@@ -485,85 +479,6 @@ fun AlertsScreen(
                     )
 
                     Spacer(modifier = Modifier.height(14.dp))
-                    Divider(color = Color.White.copy(alpha = 0.08f))
-                    Spacer(modifier = Modifier.height(14.dp))
-
-                    Text(
-                        text = "Edit Study Blocks",
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color(0xFFA78BFA),
-                        modifier = Modifier.padding(bottom = 8.dp)
-                    )
-
-                    // Block 1 Customization
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        OutlinedTextField(
-                            value = b1Label,
-                            onValueChange = { b1Label = it },
-                            label = { Text("Block 1 Label", fontSize = 10.sp) },
-                            modifier = Modifier.weight(1f),
-                            singleLine = true
-                        )
-                        OutlinedTextField(
-                            value = b1Time,
-                            onValueChange = { b1Time = it },
-                            label = { Text("Block 1 Time", fontSize = 10.sp) },
-                            modifier = Modifier.weight(1f),
-                            singleLine = true
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    // Block 2 Customization
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        OutlinedTextField(
-                            value = b2Label,
-                            onValueChange = { b2Label = it },
-                            label = { Text("Block 2 Label", fontSize = 10.sp) },
-                            modifier = Modifier.weight(1f),
-                            singleLine = true
-                        )
-                        OutlinedTextField(
-                            value = b2Time,
-                            onValueChange = { b2Time = it },
-                            label = { Text("Block 2 Time", fontSize = 10.sp) },
-                            modifier = Modifier.weight(1f),
-                            singleLine = true
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    // Block 3 Customization
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        OutlinedTextField(
-                            value = b3Label,
-                            onValueChange = { b3Label = it },
-                            label = { Text("Block 3 Label", fontSize = 10.sp) },
-                            modifier = Modifier.weight(1f),
-                            singleLine = true
-                        )
-                        OutlinedTextField(
-                            value = b3Time,
-                            onValueChange = { b3Time = it },
-                            label = { Text("Block 3 Time", fontSize = 10.sp) },
-                            modifier = Modifier.weight(1f),
-                            singleLine = true
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.height(14.dp))
 
                     Button(
                         onClick = {
@@ -574,15 +489,127 @@ fun AlertsScreen(
                             }
                             viewModel.updateQuestConfig(tempQuestName, parsedDate)
                             viewModel.updateGeminiKey(tempApiKey)
-                            viewModel.updateBlockConfig(1, b1Label, b1Time)
-                            viewModel.updateBlockConfig(2, b2Label, b2Time)
-                            viewModel.updateBlockConfig(3, b3Label, b3Time)
                         },
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(8.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF8B5CF6))
                     ) {
                         Text("Save Configuration", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        }
+
+        // Custom Timetable Editor Card
+        item {
+            var newLabel by remember { mutableStateOf("") }
+            var newTime by remember { mutableStateOf("") }
+            var newXp by remember { mutableStateOf("20") }
+            var showAddForm by remember { mutableStateOf(false) }
+
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.04f))
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "📅 Daily Timetable Scheduler",
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White
+                        )
+                        Button(
+                            onClick = { showAddForm = !showAddForm },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF312E81)),
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                            modifier = Modifier.height(28.dp)
+                        ) {
+                            Text(if (showAddForm) "Close" else "+ Add", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                    Text(
+                        text = "Customize your daily study blocks and schedule events.",
+                        fontSize = 11.sp,
+                        color = Color.White.copy(alpha = 0.5f),
+                        modifier = Modifier.padding(bottom = 12.dp)
+                    )
+
+                    if (showAddForm) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(Color.White.copy(alpha = 0.02f))
+                                .padding(12.dp)
+                        ) {
+                            Text(
+                                text = "Add New Schedule Block",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFFA78BFA)
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            OutlinedTextField(
+                                value = newLabel,
+                                onValueChange = { newLabel = it },
+                                label = { Text("Block Name (e.g. Morning Aptitude)", fontSize = 10.sp) },
+                                modifier = Modifier.fillMaxWidth(),
+                                singleLine = true
+                            )
+                            Spacer(modifier = Modifier.height(6.dp))
+                            OutlinedTextField(
+                                value = newTime,
+                                onValueChange = { newTime = it },
+                                label = { Text("Time Range (e.g. 7:00 AM - 8:30 AM)", fontSize = 10.sp) },
+                                modifier = Modifier.fillMaxWidth(),
+                                singleLine = true
+                            )
+                            Spacer(modifier = Modifier.height(6.dp))
+                            OutlinedTextField(
+                                value = newXp,
+                                onValueChange = { newXp = it },
+                                label = { Text("XP Reward (e.g. 20)", fontSize = 10.sp) },
+                                modifier = Modifier.fillMaxWidth(),
+                                singleLine = true
+                            )
+                            Spacer(modifier = Modifier.height(10.dp))
+                            Button(
+                                onClick = {
+                                    if (newLabel.isNotBlank() && newTime.isNotBlank()) {
+                                        val xpInt = newXp.toIntOrNull() ?: 20
+                                        viewModel.addTimetableBlock(newLabel, newTime, xpInt)
+                                        newLabel = ""
+                                        newTime = ""
+                                        newXp = "20"
+                                        showAddForm = false
+                                    }
+                                },
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(8.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF047857))
+                            ) {
+                                Text("Add Block to Timetable", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(12.dp))
+                    }
+
+                    // Render list of current blocks
+                    state.customBlocks.forEach { block ->
+                        TimetableBlockItem(
+                            block = block,
+                            onUpdate = { label, time, xp ->
+                                viewModel.updateTimetableBlock(block.id, label, time, xp)
+                            },
+                            onDelete = {
+                                viewModel.deleteTimetableBlock(block.id)
+                            }
+                        )
                     }
                 }
             }
@@ -662,4 +689,130 @@ enum class AlertSeverity {
     DANGER,
     WARNING,
     SUCCESS
+}
+
+@Composable
+fun TimetableBlockItem(
+    block: TimetableBlock,
+    onUpdate: (String, String, Int) -> Unit,
+    onDelete: () -> Unit
+) {
+    var editLabel by remember(block.label) { mutableStateOf(block.label) }
+    var editTime by remember(block.timeRange) { mutableStateOf(block.timeRange) }
+    var editXp by remember(block.xpValue) { mutableStateOf(block.xpValue.toString()) }
+    var isEditing by remember { mutableStateOf(false) }
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp)
+            .background(Color.White.copy(alpha = 0.01f))
+            .padding(8.dp)
+    ) {
+        if (isEditing) {
+            OutlinedTextField(
+                value = editLabel,
+                onValueChange = { editLabel = it },
+                label = { Text("Block Name", fontSize = 11.sp) },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedTextColor = Color.White,
+                    unfocusedTextColor = Color.White,
+                    focusedBorderColor = Color(0xFF8B5CF6)
+                )
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                OutlinedTextField(
+                    value = editTime,
+                    onValueChange = { editTime = it },
+                    label = { Text("Time Range", fontSize = 11.sp) },
+                    modifier = Modifier.weight(1.2f),
+                    singleLine = true,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = Color.White,
+                        unfocusedTextColor = Color.White,
+                        focusedBorderColor = Color(0xFF8B5CF6)
+                    )
+                )
+                OutlinedTextField(
+                    value = editXp,
+                    onValueChange = { editXp = it },
+                    label = { Text("XP", fontSize = 11.sp) },
+                    modifier = Modifier.weight(0.5f),
+                    singleLine = true,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = Color.White,
+                        unfocusedTextColor = Color.White,
+                        focusedBorderColor = Color(0xFF8B5CF6)
+                    )
+                )
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Button(
+                    onClick = {
+                        onUpdate(editLabel, editTime, editXp.toIntOrNull() ?: 20)
+                        isEditing = false
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF047857)),
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Text("Save", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                }
+                Button(
+                    onClick = { isEditing = false },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color.White.copy(alpha = 0.08f)),
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Text("Cancel", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                }
+            }
+        } else {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = block.label,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 13.sp,
+                        color = Color.White
+                    )
+                    Text(
+                        text = "${block.timeRange}  •  +${block.xpValue} XP",
+                        fontSize = 11.sp,
+                        color = Color.White.copy(alpha = 0.5f)
+                    )
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(
+                        text = "✍️",
+                        modifier = Modifier
+                            .clickable { isEditing = true }
+                            .padding(6.dp),
+                        fontSize = 12.sp
+                    )
+                    Text(
+                        text = "❌",
+                        modifier = Modifier
+                            .clickable { onDelete() }
+                            .padding(6.dp),
+                        fontSize = 12.sp
+                    )
+                }
+            }
+        }
+    }
 }

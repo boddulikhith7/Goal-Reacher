@@ -50,10 +50,11 @@ class StreakWidgetProvider : AppWidgetProvider() {
             views.setTextViewText(R.id.widget_streak_text, "${prefManager.streak} Days")
 
             // 2. Block Dots
+            val blocks = prefManager.customBlocks
             val completed = prefManager.completedBlocks
-            val b1Done = completed.contains(BlockType.BLOCK1.name)
-            val b2Done = completed.contains(BlockType.BLOCK2.name)
-            val b3Done = completed.contains(BlockType.BLOCK3.name)
+            val b1Done = if (blocks.isNotEmpty()) completed.contains(blocks[0].id) else false
+            val b2Done = if (blocks.size >= 2) completed.contains(blocks[1].id) else false
+            val b3Done = if (blocks.size >= 3) completed.contains(blocks[2].id) else false
 
             // Green color code = #34D399 (Int representation: Color.parseColor("#34D399"))
             // Gray color code = #4B5563 (Int representation: Color.parseColor("#4B5563"))
@@ -62,11 +63,27 @@ class StreakWidgetProvider : AppWidgetProvider() {
             views.setTextColor(R.id.widget_dot_b3, if (b3Done) Color.parseColor("#34D399") else Color.parseColor("#4B5563"))
 
             // 3. Duolingo-style Motivational Message
+            val totalCount = blocks.size
+            val completedCount = blocks.count { completed.contains(it.id) }
             val motivationMessage = when {
-                b1Done && b2Done && b3Done -> "${prefManager.questName} is fully secured today! 🌟"
-                b1Done && b2Done -> "Great! Just ${prefManager.block3Label} left. ⚡"
-                b1Done -> "Nice! ${prefManager.block2Label} is next. 📝"
-                else -> "${prefManager.block1Label} is waiting for you! 📚"
+                totalCount == 0 -> "Set up your study blocks to start your quest! 📚"
+                completedCount == totalCount -> "${prefManager.questName} is fully secured today! 🌟"
+                completedCount > 0 -> {
+                    val nextBlock = blocks.firstOrNull { !completed.contains(it.id) }
+                    if (nextBlock != null) {
+                        "Nice! Just ${nextBlock.label} left. ⚡"
+                    } else {
+                        "Keep it up! Almost there. 📝"
+                    }
+                }
+                else -> {
+                    val firstBlock = blocks.firstOrNull()
+                    if (firstBlock != null) {
+                        "${firstBlock.label} is waiting for you! 📚"
+                    } else {
+                        "Your quest is waiting for you! 📚"
+                    }
+                }
             }
             views.setTextViewText(R.id.widget_motivation_text, motivationMessage)
 

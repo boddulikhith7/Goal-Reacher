@@ -27,6 +27,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.scrollstopper.data.PreferenceManager
 import com.example.scrollstopper.data.ScheduleData
+import com.example.scrollstopper.data.TimetableBlock
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
@@ -101,17 +102,35 @@ fun CalendarScreen(
     val weekPlan = state.customSyllabus.find { it.weekNumber == state.currentWeek }
         ?: if (state.customSyllabus.isNotEmpty()) state.customSyllabus[0] else ScheduleData.weeks[0]
 
-    // Timeline events mapping
-    val timelineEvents = listOf(
-        TimelineItem("5:00 AM - 6:00 AM", "Wake up & Morning Routine", TimelineType.NEUTRAL, ""),
-        TimelineItem(state.block1Time, state.block1Label, TimelineType.BLOCK1, "Topic: ${weekPlan.topic}\nSource: ${weekPlan.block1Source}"),
-        TimelineItem("8:00 AM - 9:00 AM", "Breakfast & Rest", TimelineType.NEUTRAL, ""),
-        TimelineItem("9:00 AM - 5:00 PM", "College / Main Study Session", TimelineType.NEUTRAL, ""),
-        TimelineItem("5:00 PM - 6:00 PM", "Rest, Travel & Dinner", TimelineType.NEUTRAL, ""),
-        TimelineItem(state.block2Time, state.block2Label, TimelineType.BLOCK2, "Solve topic-wise questions.\nPortal: ${weekPlan.block2Source}"),
-        TimelineItem("8:30 PM - 9:00 PM", "Review & Rest", TimelineType.NEUTRAL, ""),
-        TimelineItem(state.block3Time, state.block3Label, TimelineType.BLOCK3, "Mon/Wed/Fri: Python | Tue/Thu: Internships\nSat: Weekly Test | Sun: Mock review")
-    )
+    // Construct timeline events dynamically from custom blocks list
+    val timelineEvents = remember(state.customBlocks, weekPlan) {
+        val events = mutableListOf<TimelineItem>()
+        // Add default wake up
+        events.add(TimelineItem("5:00 AM - 6:00 AM", "Wake up & Morning Routine", TimelineType.NEUTRAL, ""))
+        
+        state.customBlocks.forEachIndexed { index, block ->
+            val type = when (index) {
+                0 -> TimelineType.BLOCK1
+                1 -> TimelineType.BLOCK2
+                2 -> TimelineType.BLOCK3
+                else -> TimelineType.BLOCK1 // Roll over styling
+            }
+            val details = when (index) {
+                0 -> "Topic: ${weekPlan.topic}\nSource: ${weekPlan.block1Source}"
+                1 -> "Solve topic-wise questions.\nPortal: ${weekPlan.block2Source}"
+                2 -> "Mon/Wed/Fri: Python | Tue/Thu: Internships\nSat: Weekly Test | Sun: Mock review"
+                else -> "Custom study block. Focus on your active exam roadmap."
+            }
+            events.add(TimelineItem(block.timeRange, block.label, type, details))
+        }
+        
+        // Add neutral gaps if list is small
+        if (state.customBlocks.size <= 2) {
+            events.add(TimelineItem("8:30 PM - 9:00 PM", "Review & Rest", TimelineType.NEUTRAL, ""))
+        }
+        
+        events
+    }
 
     LazyColumn(
         modifier = modifier
