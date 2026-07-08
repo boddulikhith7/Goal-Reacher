@@ -123,6 +123,29 @@ class ScrollStopperAccessibilityService : AccessibilityService() {
         return false
     }
 
+    private fun isIgnoredContainer(node: AccessibilityNodeInfo?): Boolean {
+        var current = node?.parent
+        while (current != null) {
+            val id = current.viewIdResourceName
+            if (id != null && (
+                id.contains("pivot") ||
+                id.contains("navigation") ||
+                id.contains("tab") ||
+                id.contains("bar") ||
+                id.contains("menu") ||
+                id.contains("shelf") ||
+                id.contains("header")
+            )) {
+                current.recycle()
+                return true
+            }
+            val parent = current.parent
+            current.recycle()
+            current = parent
+        }
+        return false
+    }
+
     private fun detectShorts(node: AccessibilityNodeInfo?): Boolean {
         if (node == null) return false
 
@@ -138,6 +161,22 @@ class ScrollStopperAccessibilityService : AccessibilityService() {
         )) {
             // Exclude bottom navigation bar items
             if (!viewId.contains("pivot_bar") && !viewId.contains("navigation")) {
+                return true
+            }
+        }
+
+        // Fallback: Check text or content description for "Shorts" or "Reels"
+        // provided it's not inside a navigation bar or shelf container.
+        val contentDesc = node.contentDescription?.toString()
+        if (contentDesc != null && (contentDesc.equals("Shorts", ignoreCase = true) || contentDesc.contains("Reels"))) {
+            if (!isIgnoredContainer(node)) {
+                return true
+            }
+        }
+
+        val text = node.text?.toString()
+        if (text != null && text.equals("Shorts", ignoreCase = true)) {
+            if (!isIgnoredContainer(node)) {
                 return true
             }
         }
