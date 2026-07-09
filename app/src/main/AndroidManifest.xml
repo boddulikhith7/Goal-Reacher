@@ -68,6 +68,16 @@
                 android:resource="@xml/streak_widget_info" />
         </receiver>
 
+        <!-- Broadcast Receiver for Companion App XP Sync -->
+        <receiver
+            android:name=".XpReceiver"
+            android:exported="true"
+            android:enabled="true">
+            <intent-filter>
+                <action android:name="com.example.scrollstopper.ADD_XP" />
+            </intent-filter>
+        </receiver>
+
     </application>
 
 </manifest>
