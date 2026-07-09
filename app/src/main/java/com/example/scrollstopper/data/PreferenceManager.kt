@@ -67,11 +67,21 @@ class PreferenceManager(private val context: Context) {
             val currentStreak = streak
             if (savedDate == yesterday) {
                 if (!completedDiscipline) {
-                    // Broke the streak yesterday
-                    setStreakInternal(0)
+                    // Decrement mascot HP instead of breaking streak instantly
+                    val currentHp = mascotHp
+                    if (currentHp > 1) {
+                        mascotHp = currentHp - 1
+                    } else {
+                        mascotHp = 0
+                        setStreakInternal(0) // HP hit 0, break streak
+                    }
+                } else {
+                    // Restores mascot HP to 3 if discipline was maintained
+                    mascotHp = 3
                 }
             } else {
-                // More than a day gap, streak broken
+                // More than a day gap, streak broken and HP reset
+                mascotHp = 0
                 setStreakInternal(0)
             }
 
@@ -397,6 +407,7 @@ class PreferenceManager(private val context: Context) {
 
         if (completedDiscipline && !todayStreakCounted) {
             setStreakInternal(streak + 1)
+            mascotHp = 3 // Fully restore HP when today's discipline goal is met!
             prefs.edit().putBoolean(KEY_TODAY_STREAK_COUNTED, true).apply()
         } else if (!completedDiscipline && todayStreakCounted) {
             setStreakInternal((streak - 1).coerceAtLeast(0))
@@ -431,5 +442,28 @@ class PreferenceManager(private val context: Context) {
             current[index] = oldBlock.copy(label = label, timeRange = timeRange, xpValue = xp)
             customBlocks = current
         }
+    }
+
+    var mascotHp: Int
+        get() = prefs.getInt("mascot_hp", 3)
+        set(value) {
+            prefs.edit().putInt("mascot_hp", value).apply()
+            com.example.scrollstopper.widget.StreakWidgetProvider.triggerUpdate(context)
+        }
+
+    var emergencyBypassUntil: Long
+        get() = prefs.getLong("emergency_bypass_until", 0L)
+        set(value) {
+            prefs.edit().putLong("emergency_bypass_until", value).apply()
+        }
+
+    fun purchaseEmergencyPause(): Boolean {
+        val currentXp = xp
+        if (currentXp >= 50) {
+            xp = currentXp - 50
+            emergencyBypassUntil = System.currentTimeMillis() + (5 * 60 * 1000) // 5 minutes
+            return true
+        }
+        return false
     }
 }

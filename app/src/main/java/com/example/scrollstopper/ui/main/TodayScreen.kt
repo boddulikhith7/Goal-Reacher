@@ -229,6 +229,83 @@ fun TodayScreen(
             }
         }
 
+        // RPG Mascot Streak Health Card
+        item {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.04f)),
+                border = BorderStroke(
+                    width = 1.dp,
+                    color = when (state.mascotHp) {
+                        3 -> Color(0xFF10B981).copy(alpha = 0.15f) // Green
+                        2 -> Color(0xFFFBBF24).copy(alpha = 0.15f) // Yellow
+                        else -> Color(0xFFEF4444).copy(alpha = 0.15f) // Red
+                    }
+                )
+            ) {
+                Row(
+                    modifier = Modifier.padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(14.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(54.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(Color.White.copy(alpha = 0.05f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = when (state.mascotHp) {
+                                3 -> "🦉"
+                                2 -> "🤕"
+                                1 -> "🏥"
+                                else -> "👻"
+                            },
+                            fontSize = 28.sp
+                        )
+                    }
+                    
+                    Column(modifier = Modifier.weight(1f)) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Text(
+                                text = "Hooty the Focus Owl",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 14.sp,
+                                color = Color.White
+                            )
+                            Text(
+                                text = when (state.mascotHp) {
+                                    3 -> "❤️ ❤️ ❤️"
+                                    2 -> "❤️ ❤️ 💔"
+                                    1 -> "❤️ 💔 💔"
+                                    else -> "💔 💔 💔"
+                                },
+                                fontSize = 11.sp
+                            )
+                        }
+                        
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = when (state.mascotHp) {
+                                3 -> "Hoot! I'm feeling strong. Complete today's blocks to keep our study streak going!"
+                                2 -> "Careful! We missed study goals yesterday. I took 1 damage. Complete today's blocks to restore me!"
+                                1 -> "Warning! My health is critical. Complete today's blocks to restore my health and protect your streak!"
+                                else -> "Oh no! I fainted and our streak was reset. Complete today's blocks to revive me!"
+                            },
+                            fontSize = 11.sp,
+                            color = Color.White.copy(alpha = 0.7f),
+                            lineHeight = 15.sp
+                        )
+                    }
+                }
+            }
+        }
+
         // Daily Quote Card
         item {
             Card(

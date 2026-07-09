@@ -1,12 +1,15 @@
 package com.example.scrollstopper
 
+import android.app.Activity
 import android.content.Intent
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
+import androidx.compose.ui.platform.LocalContext
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
@@ -228,6 +231,8 @@ fun BlockerScreen(
             }
 
             Spacer(modifier = Modifier.height(40.dp))
+ 
+            val context = LocalContext.current
 
             // Bottom CTA
             Button(
@@ -247,6 +252,37 @@ fun BlockerScreen(
                     fontSize = 16.sp,
                     fontWeight = FontWeight.Bold
                 )
+            }
+
+            if (timeRemaining > 0) {
+                Spacer(modifier = Modifier.height(12.dp))
+                
+                Button(
+                    onClick = {
+                        val currentXp = prefManager.xp
+                        if (currentXp >= 50) {
+                            prefManager.purchaseEmergencyPause()
+                            Toast.makeText(context, "Break pass active! 5 minutes unlocked.", Toast.LENGTH_LONG).show()
+                            (context as? Activity)?.finish()
+                        } else {
+                            Toast.makeText(context, "Insufficient XP! You have $currentXp/50 XP.", Toast.LENGTH_SHORT).show()
+                        }
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(48.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color.White.copy(alpha = 0.08f),
+                        contentColor = Color(0xFFA78BFA)
+                    )
+                ) {
+                    Text(
+                        text = "Emergency 5m Break Pass (Cost: 50 XP)",
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
             }
         }
     }

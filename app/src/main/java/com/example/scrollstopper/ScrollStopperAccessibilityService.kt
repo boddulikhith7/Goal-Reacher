@@ -14,6 +14,7 @@ class ScrollStopperAccessibilityService : AccessibilityService() {
     private lateinit var prefManager: PreferenceManager
     private var lastScrollTime = 0L
     private var scrollCount = 0
+    private var consecutiveFastScrolls = 0
 
     companion object {
         private const val TAG = "ScrollStopperService"
@@ -89,6 +90,12 @@ class ScrollStopperAccessibilityService : AccessibilityService() {
 
         val rootNode = rootInActiveWindow ?: return
 
+        // Check if emergency study break pass is active
+        if (System.currentTimeMillis() < prefManager.emergencyBypassUntil) {
+            scrollCount = 0
+            return
+        }
+
         // Exclude normal video players, feeds, and searches immediately
         if (isNormalVideoOrFeed(rootNode)) {
             if (event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
@@ -114,17 +121,29 @@ class ScrollStopperAccessibilityService : AccessibilityService() {
                 return
             }
 
-            // Case 2: Handle active scroll events to check if they exceed the limit
+            // Case 2: Handle active scroll events to check if they exceed the limit or are too fast
             if (event.eventType == AccessibilityEvent.TYPE_VIEW_SCROLLED) {
                 val now = System.currentTimeMillis()
-                // Debounce scrolls (multiple scroll events might fire for one swipe, e.g., within 500ms)
-                if (now - lastScrollTime > 800) {
+                val interval = now - lastScrollTime
+                
+                // Debounce scrolls (multiple scroll events might fire for one swipe, e.g., within 400ms)
+                if (interval > 400) {
+                    // Check if they swiped very fast (within 1200ms of previous swipe)
+                    if (interval < 1200) {
+                        consecutiveFastScrolls++
+                        Log.d(TAG, "Fast Scroll detected! Consecutive: $consecutiveFastScrolls")
+                    } else {
+                        consecutiveFastScrolls = 0
+                    }
+                    
                     lastScrollTime = now
                     scrollCount++
                     Log.d(TAG, "Shorts Scroll Detected! Count: $scrollCount / ${prefManager.scrollLimit}")
 
-                    if (scrollCount >= prefManager.scrollLimit) {
+                    // Block if either: 1) total scroll count exceeded, or 2) 3 consecutive fast doomscrolls detected
+                    if (scrollCount >= prefManager.scrollLimit || consecutiveFastScrolls >= 3) {
                         scrollCount = 0
+                        consecutiveFastScrolls = 0
                         // Activate cool-down block
                         val pauseMillis = prefManager.pauseDurationSeconds * 1000L
                         prefManager.blockUntilTimestamp = System.currentTimeMillis() + pauseMillis

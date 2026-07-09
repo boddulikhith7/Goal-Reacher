@@ -32,7 +32,8 @@ data class MainUiState(
     val examDateMillis: Long = 0L,
     val geminiApiKey: String = "",
     val customSyllabus: List<WeekPlan> = emptyList(),
-    val customBlocks: List<TimetableBlock> = emptyList()
+    val customBlocks: List<TimetableBlock> = emptyList(),
+    val mascotHp: Int = 3
 )
 
 class MainScreenViewModel(application: Application) : AndroidViewModel(application) {
@@ -65,9 +66,18 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
                 examDateMillis = prefManager.examDateMillis,
                 geminiApiKey = prefManager.geminiApiKey,
                 customSyllabus = prefManager.customSyllabus,
-                customBlocks = prefManager.customBlocks
+                customBlocks = prefManager.customBlocks,
+                mascotHp = prefManager.mascotHp
             )
         }
+    }
+
+    fun purchaseEmergencyPause(): Boolean {
+        val success = prefManager.purchaseEmergencyPause()
+        if (success) {
+            refreshState()
+        }
+        return success
     }
 
     fun toggleBlock(blockType: BlockType) {
