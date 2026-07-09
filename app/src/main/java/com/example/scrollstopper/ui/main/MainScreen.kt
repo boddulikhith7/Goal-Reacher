@@ -9,6 +9,7 @@ import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -37,7 +38,8 @@ enum class ScreenTab {
     TODAY,
     CALENDAR,
     ALERTS,
-    ROADMAP
+    ROADMAP,
+    BOXING
 }
 
 @Composable
@@ -122,6 +124,19 @@ fun MainScreen(
                         indicatorColor = Color.White.copy(alpha = 0.05f)
                     )
                 )
+                NavigationBarItem(
+                    selected = selectedTab == ScreenTab.BOXING,
+                    onClick = { selectedTab = ScreenTab.BOXING },
+                    icon = { Icon(Icons.Default.Favorite, contentDescription = "Boxing") },
+                    label = { Text("Boxing", fontSize = 11.sp) },
+                    colors = NavigationBarItemDefaults.colors(
+                        selectedIconColor = Color(0xFF8B5CF6),
+                        selectedTextColor = Color(0xFF8B5CF6),
+                        unselectedIconColor = Color.White.copy(alpha = 0.4f),
+                        unselectedTextColor = Color.White.copy(alpha = 0.4f),
+                        indicatorColor = Color.White.copy(alpha = 0.05f)
+                    )
+                )
             }
         }
     ) { innerPadding ->
@@ -157,6 +172,13 @@ fun MainScreen(
                         state = state,
                         viewModel = viewModel,
                         onNavigateToToday = { selectedTab = ScreenTab.TODAY },
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
+                ScreenTab.BOXING -> {
+                    BoxingScreen(
+                        state = state,
+                        viewModel = viewModel,
                         modifier = Modifier.fillMaxSize()
                     )
                 }

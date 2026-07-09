@@ -166,4 +166,9 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
         prefManager.currentWeek = 1
         refreshState()
     }
+
+    fun addXp(amount: Int) {
+        prefManager.xp += amount
+        refreshState()
+    }
 }
