@@ -42,6 +42,45 @@ class ScrollStopperAccessibilityService : AccessibilityService() {
         Log.d(TAG, "ScrollStopperAccessibilityService created")
     }
 
+    private fun isNormalVideoOrFeed(node: AccessibilityNodeInfo?): Boolean {
+        if (node == null) return false
+
+        val desc = node.contentDescription?.toString()
+        val viewId = node.viewIdResourceName
+
+        // 1. YouTube Logo (indicates Home/Subscriptions feed)
+        if (desc != null && desc.equals("YouTube", ignoreCase = true)) {
+            return true
+        }
+
+        // 2. Collapse player button (indicates normal video player page)
+        if (desc != null && (desc.contains("collapse", ignoreCase = true) || desc.contains("minimize", ignoreCase = true))) {
+            return true
+        }
+        if (viewId != null && (viewId.contains("collapse") || viewId.contains("minimize"))) {
+            return true
+        }
+
+        // 3. Normal video seek bar / progress bar
+        if (node.className?.toString()?.contains("SeekBar") == true) {
+            return true
+        }
+        if (viewId != null && (viewId.contains("time_bar") || viewId.contains("player_progress_bar"))) {
+            return true
+        }
+
+        // Recursively check children
+        for (i in 0 until node.childCount) {
+            val child = node.getChild(i)
+            if (child != null) {
+                val found = isNormalVideoOrFeed(child)
+                child.recycle()
+                if (found) return true
+            }
+        }
+        return false
+    }
+
     override fun onAccessibilityEvent(event: AccessibilityEvent) {
         val packageName = event.packageName?.toString() ?: return
 
@@ -49,6 +88,14 @@ class ScrollStopperAccessibilityService : AccessibilityService() {
         if (packageName != YOUTUBE_PACKAGE) return
 
         val rootNode = rootInActiveWindow ?: return
+
+        // Exclude normal video players, feeds, and searches immediately
+        if (isNormalVideoOrFeed(rootNode)) {
+            if (event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
+                scrollCount = 0
+            }
+            return
+        }
 
         // Check if whitelisted educational channel is on screen
         if (containsWhitelistChannel(rootNode)) {
