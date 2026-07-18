@@ -47,7 +47,11 @@ import android.os.Build
 import android.media.RingtoneManager
 import androidx.compose.ui.platform.LocalContext
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.launch
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.border
 import androidx.compose.ui.text.style.TextDecoration
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -106,6 +110,12 @@ fun TodayScreen(
     var filterReason by remember { mutableStateOf("All") }
     var showFilterSubjectDropdown by remember { mutableStateOf(false) }
     var showFilterReasonDropdown by remember { mutableStateOf(false) }
+
+    var flashcardTopicInput by remember { mutableStateOf("") }
+    var cardQuantity by remember { mutableFloatStateOf(5f) }
+    var isGeneratingCards by remember { mutableStateOf(false) }
+    var currentCardIndex by remember { mutableStateOf(0) }
+    var isFlipped by remember { mutableStateOf(false) }
 
     val focusManager = LocalFocusManager.current
 
@@ -999,6 +1009,273 @@ fun TodayScreen(
                 }
             }
         }
+
+        // 5. AI Flashcard Generator & Practice Deck Section
+        item {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.04f)),
+                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.08f))
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "🧠 AI Study Flashcards",
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White
+                        )
+                        if (state.flashcards.isNotEmpty()) {
+                            IconButton(
+                                onClick = {
+                                    viewModel.clearFlashcards()
+                                    currentCardIndex = 0
+                                    isFlipped = false
+                                },
+                                modifier = Modifier.size(24.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Delete,
+                                    contentDescription = "Clear Deck",
+                                    tint = Color.Red.copy(alpha = 0.6f),
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    if (state.flashcards.isEmpty()) {
+                        // Generator View
+                        Text(
+                            text = "Topics covered in your study block:",
+                            fontSize = 12.sp,
+                            color = Color.White.copy(alpha = 0.6f)
+                        )
+                        Spacer(modifier = Modifier.height(6.dp))
+                        OutlinedTextField(
+                            value = flashcardTopicInput,
+                            onValueChange = { flashcardTopicInput = it },
+                            placeholder = { Text("e.g., Maxwell bridge, Operational Amplifiers", fontSize = 12.sp) },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(8.dp),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedTextColor = Color.White,
+                                unfocusedTextColor = Color.White.copy(alpha = 0.8f),
+                                focusedBorderColor = Color(0xFF818CF8),
+                                unfocusedBorderColor = Color.White.copy(alpha = 0.15f)
+                            ),
+                            singleLine = true
+                        )
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        // Card quantity slider
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "Card Quantity: ${cardQuantity.toInt()}",
+                                fontSize = 12.sp,
+                                color = Color.White.copy(alpha = 0.6f)
+                            )
+                        }
+                        Slider(
+                            value = cardQuantity,
+                            onValueChange = { cardQuantity = it },
+                            valueRange = 3f..10f,
+                            steps = 6,
+                            colors = SliderDefaults.colors(
+                                thumbColor = Color(0xFF818CF8),
+                                activeTrackColor = Color(0xFF818CF8),
+                                inactiveTrackColor = Color.White.copy(alpha = 0.1f)
+                            )
+                        )
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        val scope = rememberCoroutineScope()
+                        val context = LocalContext.current
+                        Button(
+                            onClick = {
+                                if (state.geminiApiKey.isBlank()) {
+                                    android.widget.Toast.makeText(
+                                        context,
+                                        "Please enter your Gemini API Key in the Alerts settings first!",
+                                        android.widget.Toast.LENGTH_LONG
+                                    ).show()
+                                    return@Button
+                                }
+                                if (flashcardTopicInput.isBlank()) {
+                                    android.widget.Toast.makeText(
+                                        context,
+                                        "Please enter topics you covered!",
+                                        android.widget.Toast.LENGTH_LONG
+                                    ).show()
+                                    return@Button
+                                }
+                                isGeneratingCards = true
+                                scope.launch(Dispatchers.IO) {
+                                    val response = queryGeminiForFlashcards(
+                                        apiKey = state.geminiApiKey,
+                                        topic = flashcardTopicInput,
+                                        quantity = cardQuantity.toInt()
+                                    )
+                                    withContext(Dispatchers.Main) {
+                                        if (response != null) {
+                                            try {
+                                                val cleanJson = response
+                                                    .replace("```json", "")
+                                                    .replace("```", "")
+                                                    .trim()
+                                                val json = org.json.JSONObject(cleanJson)
+                                                val jsonFlashcards = json.getJSONArray("flashcards")
+                                                val flashcardsList = mutableListOf<com.example.scrollstopper.data.Flashcard>()
+                                                for (i in 0 until jsonFlashcards.length()) {
+                                                    val obj = jsonFlashcards.getJSONObject(i)
+                                                    flashcardsList.add(com.example.scrollstopper.data.Flashcard(
+                                                        question = obj.getString("question"),
+                                                        answer = obj.getString("answer"),
+                                                        isMastered = false
+                                                    ))
+                                                }
+                                                val jsonQuiz = json.getJSONArray("quizQuestions")
+                                                val quizList = mutableListOf<com.example.scrollstopper.data.BlockerQuizQuestion>()
+                                                for (i in 0 until jsonQuiz.length()) {
+                                                    val obj = jsonQuiz.getJSONObject(i)
+                                                    val optsJson = obj.getJSONArray("options")
+                                                    val opts = listOf(optsJson.getString(0), optsJson.getString(1), optsJson.getString(2))
+                                                    quizList.add(com.example.scrollstopper.data.BlockerQuizQuestion(
+                                                        question = obj.getString("question"),
+                                                        options = opts,
+                                                        correctIndex = obj.getInt("correctIndex")
+                                                    ))
+                                                }
+                                                viewModel.saveFlashcardsAndQuiz(flashcardsList, quizList)
+                                                android.widget.Toast.makeText(context, "Flashcards & focus quizzes generated!", android.widget.Toast.LENGTH_LONG).show()
+                                            } catch (e: Exception) {
+                                                e.printStackTrace()
+                                                android.widget.Toast.makeText(context, "Error parsing AI response. Try again.", android.widget.Toast.LENGTH_LONG).show()
+                                            }
+                                        } else {
+                                            android.widget.Toast.makeText(context, "Failed to connect to Gemini API. Check key/internet.", android.widget.Toast.LENGTH_LONG).show()
+                                        }
+                                        isGeneratingCards = false
+                                    }
+                                }
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(48.dp),
+                            shape = RoundedCornerShape(8.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF312E81)),
+                            enabled = !isGeneratingCards
+                        ) {
+                            if (isGeneratingCards) {
+                                CircularProgressIndicator(modifier = Modifier.size(24.dp), color = Color.White)
+                            } else {
+                                Text("Generate Study Flashcards", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    } else {
+                        // Practice Deck View
+                        val currentCard = state.flashcards.getOrNull(currentCardIndex)
+                        if (currentCard != null) {
+                            Text(
+                                text = "Card ${currentCardIndex + 1} of ${state.flashcards.size} (${state.flashcards.filter { it.isMastered }.size} Mastered)",
+                                fontSize = 11.sp,
+                                color = Color.White.copy(alpha = 0.5f),
+                                modifier = Modifier.align(Alignment.End)
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+
+                            // Interactive Flippable Box
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(180.dp)
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(Color.White.copy(alpha = 0.05f))
+                                    .clickable { isFlipped = !isFlipped }
+                                    .border(1.dp, Color(0xFF818CF8).copy(alpha = if (isFlipped) 0.6f else 0.2f), RoundedCornerShape(12.dp))
+                                    .padding(16.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Text(
+                                        text = if (isFlipped) "ANSWER:" else "QUESTION:",
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = if (isFlipped) Color(0xFF10B981) else Color(0xFFA78BFA)
+                                    )
+                                    Spacer(modifier = Modifier.height(12.dp))
+                                    Text(
+                                        text = if (isFlipped) currentCard.answer else currentCard.question,
+                                        fontSize = 14.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        color = Color.White,
+                                        textAlign = TextAlign.Center,
+                                        lineHeight = 20.sp
+                                    )
+                                    Spacer(modifier = Modifier.height(16.dp))
+                                    Text(
+                                        text = if (isFlipped) "Tap to see Question" else "Tap to see Answer",
+                                        fontSize = 10.sp,
+                                        color = Color.White.copy(alpha = 0.3f)
+                                    )
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(16.dp))
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Button(
+                                    onClick = {
+                                        val updated = state.flashcards.toMutableList()
+                                        updated[currentCardIndex] = currentCard.copy(isMastered = false)
+                                        viewModel.updateFlashcards(updated)
+                                        
+                                        // Move to next card
+                                        isFlipped = false
+                                        currentCardIndex = (currentCardIndex + 1) % state.flashcards.size
+                                    },
+                                    modifier = Modifier.weight(1f),
+                                    shape = RoundedCornerShape(8.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color.White.copy(alpha = 0.1f))
+                                ) {
+                                    Text("Still Learning", fontSize = 12.sp)
+                                }
+
+                                Button(
+                                    onClick = {
+                                        val updated = state.flashcards.toMutableList()
+                                        updated[currentCardIndex] = currentCard.copy(isMastered = true)
+                                        viewModel.updateFlashcards(updated)
+                                        
+                                        // Move to next card
+                                        isFlipped = false
+                                        currentCardIndex = (currentCardIndex + 1) % state.flashcards.size
+                                    },
+                                    modifier = Modifier.weight(1f),
+                                    shape = RoundedCornerShape(8.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10B981))
+                                ) {
+                                    Text("Mastered ✅", fontSize = 12.sp)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 
         if (activeTimerBlock != null) {
@@ -1127,4 +1404,53 @@ fun FocusTimerDialog(
         containerColor = Color(0xFF1E1B4B),
         shape = RoundedCornerShape(16.dp)
     )
+}
+
+fun queryGeminiForFlashcards(apiKey: String, topic: String, quantity: Int): String? {
+    val prompt = "Generate exactly $quantity study flashcards and exactly 3 multiple-choice study quiz questions for EEE/GATE exams based on the topic: '$topic'. " +
+            "Return the response strictly in JSON format. The JSON must have exactly these keys: " +
+            "\"flashcards\" (an array of objects with 'question' and 'answer' fields) and " +
+            "\"quizQuestions\" (an array of objects with 'question', 'options' (an array of exactly 3 strings), and 'correctIndex' (integer 0, 1, or 2)). " +
+            "Do not include markdown code block formatting (like ```json)."
+
+    val urlStr = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=$apiKey"
+    var conn: java.net.HttpURLConnection? = null
+    return try {
+        val url = java.net.URL(urlStr)
+        conn = url.openConnection() as java.net.HttpURLConnection
+        conn.requestMethod = "POST"
+        conn.setRequestProperty("Content-Type", "application/json")
+        conn.doOutput = true
+
+        val body = org.json.JSONObject().apply {
+            put("contents", org.json.JSONArray().put(
+                org.json.JSONObject().put("parts", org.json.JSONArray().put(
+                    org.json.JSONObject().put("text", prompt)
+                ))
+            ))
+        }
+
+        val os = conn.outputStream
+        os.write(body.toString().toByteArray())
+        os.close()
+
+        val responseCode = conn.responseCode
+        if (responseCode == java.net.HttpURLConnection.HTTP_OK) {
+            val br = java.io.BufferedReader(java.io.InputStreamReader(conn.inputStream))
+            val sb = java.lang.StringBuilder()
+            var line: String?
+            while (br.readLine().also { line = it } != null) {
+                sb.append(line)
+            }
+            br.close()
+            sb.toString()
+        } else {
+            null
+        }
+    } catch (e: Exception) {
+        e.printStackTrace()
+        null
+    } finally {
+        conn?.disconnect()
+    }
 }

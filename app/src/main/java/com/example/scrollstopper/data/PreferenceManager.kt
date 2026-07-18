@@ -466,4 +466,26 @@ class PreferenceManager(private val context: Context) {
         }
         return false
     }
+
+    var flashcards: List<Flashcard>
+        get() {
+            val serialized = prefs.getString("flashcards_list", "") ?: ""
+            if (serialized.isEmpty()) return emptyList()
+            return serialized.split("::").mapNotNull { Flashcard.deserialize(it) }
+        }
+        set(value) {
+            val serialized = value.joinToString("::") { it.serialize() }
+            prefs.edit().putString("flashcards_list", serialized).apply()
+        }
+
+    var blockerQuizPool: List<BlockerQuizQuestion>
+        get() {
+            val serialized = prefs.getString("blocker_quiz_pool", "") ?: ""
+            if (serialized.isEmpty()) return emptyList()
+            return serialized.split("::").mapNotNull { BlockerQuizQuestion.deserialize(it) }
+        }
+        set(value) {
+            val serialized = value.joinToString("::") { it.serialize() }
+            prefs.edit().putString("blocker_quiz_pool", serialized).apply()
+        }
 }

@@ -92,3 +92,48 @@ data class ErrorLogItem(
         }
     }
 }
+
+data class Flashcard(
+    val question: String,
+    val answer: String,
+    val isMastered: Boolean = false
+) {
+    fun serialize(): String {
+        return "$question^$answer^$isMastered"
+    }
+
+    companion object {
+        fun deserialize(str: String): Flashcard? {
+            val parts = str.split("^")
+            if (parts.size < 3) return null
+            return Flashcard(
+                question = parts[0],
+                answer = parts[1],
+                isMastered = parts[2].toBoolean()
+            )
+        }
+    }
+}
+
+data class BlockerQuizQuestion(
+    val question: String,
+    val options: List<String>,
+    val correctIndex: Int
+) {
+    fun serialize(): String {
+        val optsJoined = options.joinToString("|")
+        return "$question^$optsJoined^$correctIndex"
+    }
+
+    companion object {
+        fun deserialize(str: String): BlockerQuizQuestion? {
+            val parts = str.split("^")
+            if (parts.size < 3) return null
+            return BlockerQuizQuestion(
+                question = parts[0],
+                options = parts[1].split("|"),
+                correctIndex = parts[2].toIntOrNull() ?: 0
+            )
+        }
+    }
+}

@@ -35,7 +35,9 @@ data class MainUiState(
     val geminiApiKey: String = "",
     val customSyllabus: List<WeekPlan> = emptyList(),
     val customBlocks: List<TimetableBlock> = emptyList(),
-    val mascotHp: Int = 3
+    val mascotHp: Int = 3,
+    val flashcards: List<com.example.scrollstopper.data.Flashcard> = emptyList(),
+    val blockerQuizPool: List<com.example.scrollstopper.data.BlockerQuizQuestion> = emptyList()
 )
 
 class MainScreenViewModel(application: Application) : AndroidViewModel(application) {
@@ -85,7 +87,9 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
                 geminiApiKey = prefManager.geminiApiKey,
                 customSyllabus = prefManager.customSyllabus,
                 customBlocks = prefManager.customBlocks,
-                mascotHp = prefManager.mascotHp
+                mascotHp = prefManager.mascotHp,
+                flashcards = prefManager.flashcards,
+                blockerQuizPool = prefManager.blockerQuizPool
             )
         }
     }
@@ -187,6 +191,26 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
 
     fun addXp(amount: Int) {
         prefManager.xp += amount
+        refreshState()
+    }
+
+    fun saveFlashcardsAndQuiz(
+        flashcardsList: List<com.example.scrollstopper.data.Flashcard>,
+        quizList: List<com.example.scrollstopper.data.BlockerQuizQuestion>
+    ) {
+        prefManager.flashcards = flashcardsList
+        prefManager.blockerQuizPool = quizList
+        refreshState()
+    }
+
+    fun updateFlashcards(flashcardsList: List<com.example.scrollstopper.data.Flashcard>) {
+        prefManager.flashcards = flashcardsList
+        refreshState()
+    }
+
+    fun clearFlashcards() {
+        prefManager.flashcards = emptyList()
+        prefManager.blockerQuizPool = emptyList()
         refreshState()
     }
 }
