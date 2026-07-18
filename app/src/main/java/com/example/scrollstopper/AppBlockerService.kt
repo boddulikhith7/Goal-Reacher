@@ -82,7 +82,26 @@ class AppBlockerService : Service() {
                 val blockerIntent = Intent(this, BlockerActivity::class.java).apply {
                     flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
                 }
-                startActivity(blockerIntent)
+                
+                val pendingIntent = android.app.PendingIntent.getActivity(
+                    this,
+                    0,
+                    blockerIntent,
+                    android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE
+                )
+
+                val blockerNotification = NotificationCompat.Builder(this, "app_blocker_channel")
+                    .setSmallIcon(android.R.drawable.ic_lock_lock)
+                    .setContentTitle("Goal Reacher Focus Block")
+                    .setContentText("Tap to return to your study quest.")
+                    .setPriority(NotificationCompat.PRIORITY_HIGH)
+                    .setCategory(NotificationCompat.CATEGORY_CALL)
+                    .setFullScreenIntent(pendingIntent, true)
+                    .setAutoCancel(true)
+                    .build()
+
+                val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+                notificationManager.notify(102, blockerNotification)
             }
         }
     }
