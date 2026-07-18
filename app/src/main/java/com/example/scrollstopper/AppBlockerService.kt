@@ -8,20 +8,70 @@ import android.app.usage.UsageEvents
 import android.app.usage.UsageStatsManager
 import android.content.Context
 import android.content.Intent
+import android.graphics.PixelFormat
 import android.os.Build
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
 import android.util.Log
+import android.view.WindowManager
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.ComposeView
+import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.core.app.NotificationCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleOwner
+import androidx.lifecycle.LifecycleRegistry
+import androidx.lifecycle.ViewModelStore
+import androidx.lifecycle.ViewModelStoreOwner
+import androidx.lifecycle.setViewTreeLifecycleOwner
+import androidx.lifecycle.setViewTreeViewModelStoreOwner
+import androidx.savedstate.SavedStateRegistry
+import androidx.savedstate.SavedStateRegistryController
+import androidx.savedstate.SavedStateRegistryOwner
+import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import com.example.scrollstopper.data.PreferenceManager
+import com.example.scrollstopper.theme.ScrollStopperTheme
 import java.util.Calendar
+
+class ServiceLifecycleOwner : LifecycleOwner, ViewModelStoreOwner, SavedStateRegistryOwner {
+    private val lifecycleRegistry = LifecycleRegistry(this)
+    private val store = ViewModelStore()
+    private val controller = SavedStateRegistryController.create(this)
+
+    init {
+        controller.performRestore(null)
+        lifecycleRegistry.currentState = Lifecycle.State.CREATED
+    }
+
+    fun start() {
+        lifecycleRegistry.currentState = Lifecycle.State.STARTED
+    }
+
+    fun resume() {
+        lifecycleRegistry.currentState = Lifecycle.State.RESUMED
+    }
+
+    fun stop() {
+        lifecycleRegistry.currentState = Lifecycle.State.DESTROYED
+        store.clear()
+    }
+
+    override val lifecycle: Lifecycle = lifecycleRegistry
+    override val viewModelStore: ViewModelStore = store
+    override val savedStateRegistry: SavedStateRegistry = controller.savedStateRegistry
+}
 
 class AppBlockerService : Service() {
 
     private lateinit var handler: Handler
     private lateinit var prefManager: PreferenceManager
     private val checkInterval = 1000L // 1 second
+    private var overlayView: ComposeView? = null
+    private var lifecycleOwner: ServiceLifecycleOwner? = null
 
     private val checkRunnable = object : Runnable {
         override fun run() {
@@ -50,6 +100,9 @@ class AppBlockerService : Service() {
     override fun onDestroy() {
         super.onDestroy()
         handler.removeCallbacks(checkRunnable)
+        handler.post {
+            removeBlockerOverlay()
+        }
         Log.i(TAG, "AppBlockerService destroyed")
     }
 
@@ -78,31 +131,97 @@ class AppBlockerService : Service() {
             // 3. We are currently inside a scheduled, uncompleted study block
             if ((isCoolDownBlocked || prefManager.strictMode || inActiveStudyBlock) && !isBypassed) {
                 Log.i(TAG, "Blocking active foreground application: $currentApp")
-                
-                val blockerIntent = Intent(this, BlockerActivity::class.java).apply {
-                    flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+                handler.post {
+                    showBlockerOverlay()
                 }
-                
-                val pendingIntent = android.app.PendingIntent.getActivity(
-                    this,
-                    0,
-                    blockerIntent,
-                    android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE
-                )
-
-                val blockerNotification = NotificationCompat.Builder(this, "app_blocker_channel")
-                    .setSmallIcon(android.R.drawable.ic_lock_lock)
-                    .setContentTitle("Goal Reacher Focus Block")
-                    .setContentText("Tap to return to your study quest.")
-                    .setPriority(NotificationCompat.PRIORITY_HIGH)
-                    .setCategory(NotificationCompat.CATEGORY_CALL)
-                    .setFullScreenIntent(pendingIntent, true)
-                    .setAutoCancel(true)
-                    .build()
-
-                val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-                notificationManager.notify(102, blockerNotification)
+            } else {
+                handler.post {
+                    removeBlockerOverlay()
+                }
             }
+        } else {
+            // Remove the overlay if they exit YouTube and are on any allowed app (not our own)
+            if (currentApp != packageName) {
+                handler.post {
+                    removeBlockerOverlay()
+                }
+            }
+        }
+    }
+
+    private fun showBlockerOverlay() {
+        if (overlayView != null) return // Already showing
+
+        val windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
+        val params = WindowManager.LayoutParams(
+            WindowManager.LayoutParams.MATCH_PARENT,
+            WindowManager.LayoutParams.MATCH_PARENT,
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+            } else {
+                @Suppress("DEPRECATION")
+                WindowManager.LayoutParams.TYPE_SYSTEM_ALERT
+            },
+            WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or 
+                    WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+                    WindowManager.LayoutParams.FLAG_FULLSCREEN,
+            PixelFormat.TRANSLUCENT
+        )
+
+        val owner = ServiceLifecycleOwner()
+        owner.start()
+        owner.resume()
+        lifecycleOwner = owner
+
+        val composeView = ComposeView(this).apply {
+            setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindow)
+            setViewTreeLifecycleOwner(owner)
+            setViewTreeViewModelStoreOwner(owner)
+            setViewTreeSavedStateRegistryOwner(owner)
+
+            setContent {
+                ScrollStopperTheme {
+                    Surface(
+                        modifier = Modifier.fillMaxSize(),
+                        color = MaterialTheme.colorScheme.background
+                    ) {
+                        BlockerScreen(
+                            prefManager = prefManager,
+                            onClose = {
+                                // Redirect to home screen
+                                val homeIntent = Intent(Intent.ACTION_MAIN).apply {
+                                    addCategory(Intent.CATEGORY_HOME)
+                                    flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                                }
+                                startActivity(homeIntent)
+                                removeBlockerOverlay()
+                            }
+                        )
+                    }
+                }
+            }
+        }
+
+        try {
+            windowManager.addView(composeView, params)
+            overlayView = composeView
+            Log.i(TAG, "Blocker overlay added to WindowManager successfully.")
+        } catch (e: Exception) {
+            Log.e(TAG, "Error adding blocker overlay to WindowManager: ${e.message}", e)
+        }
+    }
+
+    private fun removeBlockerOverlay() {
+        val view = overlayView ?: return
+        val windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
+        try {
+            windowManager.removeView(view)
+            lifecycleOwner?.stop()
+            lifecycleOwner = null
+            overlayView = null
+            Log.i(TAG, "Blocker overlay removed from WindowManager successfully.")
+        } catch (e: Exception) {
+            Log.e(TAG, "Error removing blocker overlay: ${e.message}", e)
         }
     }
 
