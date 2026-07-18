@@ -29,6 +29,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
+import androidx.compose.ui.platform.LocalFocusManager
 import com.example.scrollstopper.data.BlockType
 import com.example.scrollstopper.data.TimetableBlock
 import com.example.scrollstopper.notifications.AlarmReceiver
@@ -42,6 +43,7 @@ fun AlertsScreen(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    val focusManager = LocalFocusManager.current
 
     // Notification Permission Check (For Android 13+)
     var hasNotificationPermission by remember {
@@ -494,12 +496,22 @@ fun AlertsScreen(
                     Button(
                         onClick = {
                             val parsedDate = try {
-                                sdf.parse(tempDateStr)?.time ?: state.examDateMillis
+                                sdf.parse(tempDateStr.trim())?.time ?: state.examDateMillis
                             } catch (e: Exception) {
                                 state.examDateMillis
                             }
-                            viewModel.updateQuestConfig(tempQuestName, parsedDate)
-                            viewModel.updateGeminiKey(tempApiKey)
+                            viewModel.updateQuestConfig(tempQuestName.trim(), parsedDate)
+                            viewModel.updateGeminiKey(tempApiKey.trim())
+                            
+                            // Dismiss keyboard and clear focus
+                            focusManager.clearFocus()
+                            
+                            // Show success toast
+                            android.widget.Toast.makeText(
+                                context,
+                                "Configuration Saved Successfully!",
+                                android.widget.Toast.LENGTH_SHORT
+                            ).show()
                         },
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(8.dp),
