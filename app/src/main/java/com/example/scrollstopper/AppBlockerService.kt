@@ -37,41 +37,12 @@ import com.example.scrollstopper.data.PreferenceManager
 import com.example.scrollstopper.theme.ScrollStopperTheme
 import java.util.Calendar
 
-class ServiceLifecycleOwner : LifecycleOwner, ViewModelStoreOwner, SavedStateRegistryOwner {
-    private val lifecycleRegistry = LifecycleRegistry(this)
-    private val store = ViewModelStore()
-    private val controller = SavedStateRegistryController.create(this)
-
-    init {
-        controller.performRestore(null)
-        lifecycleRegistry.currentState = Lifecycle.State.CREATED
-    }
-
-    fun start() {
-        lifecycleRegistry.currentState = Lifecycle.State.STARTED
-    }
-
-    fun resume() {
-        lifecycleRegistry.currentState = Lifecycle.State.RESUMED
-    }
-
-    fun stop() {
-        lifecycleRegistry.currentState = Lifecycle.State.DESTROYED
-        store.clear()
-    }
-
-    override val lifecycle: Lifecycle = lifecycleRegistry
-    override val viewModelStore: ViewModelStore = store
-    override val savedStateRegistry: SavedStateRegistry = controller.savedStateRegistry
-}
-
 class AppBlockerService : Service() {
 
     private lateinit var handler: Handler
     private lateinit var prefManager: PreferenceManager
     private val checkInterval = 1000L // 1 second
-    private var overlayView: ComposeView? = null
-    private var lifecycleOwner: ServiceLifecycleOwner? = null
+    private var overlayView: android.view.View? = null
 
     private val checkRunnable = object : Runnable {
         override fun run() {
@@ -168,43 +139,94 @@ class AppBlockerService : Service() {
             PixelFormat.TRANSLUCENT
         )
 
-        val owner = ServiceLifecycleOwner()
-        owner.start()
-        owner.resume()
-        lifecycleOwner = owner
-
-        val composeView = ComposeView(this).apply {
-            setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindow)
-            setViewTreeLifecycleOwner(owner)
-            setViewTreeViewModelStoreOwner(owner)
-            setViewTreeSavedStateRegistryOwner(owner)
-
-            setContent {
-                ScrollStopperTheme {
-                    Surface(
-                        modifier = Modifier.fillMaxSize(),
-                        color = MaterialTheme.colorScheme.background
-                    ) {
-                        BlockerScreen(
-                            prefManager = prefManager,
-                            onClose = {
-                                // Redirect to home screen
-                                val homeIntent = Intent(Intent.ACTION_MAIN).apply {
-                                    addCategory(Intent.CATEGORY_HOME)
-                                    flags = Intent.FLAG_ACTIVITY_NEW_TASK
-                                }
-                                startActivity(homeIntent)
-                                removeBlockerOverlay()
-                            }
-                        )
-                    }
-                }
-            }
+        // Create standard LinearLayout layout programmatically
+        val layout = android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
+            gravity = android.view.Gravity.CENTER
+            setBackgroundColor(android.graphics.Color.parseColor("#0F0A19")) // Sleek deep purple dark mode background
+            setPadding(64, 64, 64, 64)
         }
 
+        // Lock Icon Text
+        val lockText = android.widget.TextView(this).apply {
+            text = "🛡️"
+            textSize = 64f
+            gravity = android.view.Gravity.CENTER
+        }
+        layout.addView(lockText)
+
+        // Title
+        val titleText = android.widget.TextView(this).apply {
+            text = "Goal Reacher Focus Block"
+            textSize = 24f
+            setTextColor(android.graphics.Color.WHITE)
+            setTypeface(android.graphics.Typeface.DEFAULT_BOLD)
+            gravity = android.view.Gravity.CENTER
+            val layoutParams = android.widget.LinearLayout.LayoutParams(
+                android.widget.LinearLayout.LayoutParams.WRAP_CONTENT,
+                android.widget.LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                setMargins(0, 32, 0, 16)
+            }
+            this.layoutParams = layoutParams
+        }
+        layout.addView(titleText)
+
+        // Subtitle / Random Quote
+        val randomQuote = com.example.scrollstopper.data.QuotesData.quotes.random()
+        val quoteText = android.widget.TextView(this).apply {
+            text = "\"${randomQuote.text}\"\n— ${randomQuote.author}"
+            textSize = 14f
+            setTextColor(android.graphics.Color.parseColor("#A78BFA")) // Light purple accent color
+            gravity = android.view.Gravity.CENTER
+            val layoutParams = android.widget.LinearLayout.LayoutParams(
+                android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
+                android.widget.LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                setMargins(0, 0, 0, 48)
+            }
+            this.layoutParams = layoutParams
+        }
+        layout.addView(quoteText)
+
+        // Exit Button
+        val exitButton = android.widget.Button(this).apply {
+            text = "Exit YouTube"
+            setTextColor(android.graphics.Color.WHITE)
+            textSize = 16f
+            gravity = android.view.Gravity.CENTER
+            
+            // Set background color using dynamic gradient with rounded corners
+            val shape = android.graphics.drawable.GradientDrawable().apply {
+                shape = android.graphics.drawable.GradientDrawable.RECTANGLE
+                cornerRadius = 24f
+                setColor(android.graphics.Color.parseColor("#8B5CF6")) // Accent purple button
+            }
+            background = shape
+            
+            val layoutParams = android.widget.LinearLayout.LayoutParams(
+                android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
+                144 // ~48dp height in pixels
+            ).apply {
+                setMargins(48, 0, 48, 0)
+            }
+            this.layoutParams = layoutParams
+            
+            setOnClickListener {
+                // Redirect to home screen
+                val homeIntent = Intent(Intent.ACTION_MAIN).apply {
+                    addCategory(Intent.CATEGORY_HOME)
+                    flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                }
+                startActivity(homeIntent)
+                removeBlockerOverlay()
+            }
+        }
+        layout.addView(exitButton)
+
         try {
-            windowManager.addView(composeView, params)
-            overlayView = composeView
+            windowManager.addView(layout, params)
+            overlayView = layout
             Log.i(TAG, "Blocker overlay added to WindowManager successfully.")
         } catch (e: Exception) {
             Log.e(TAG, "Error adding blocker overlay to WindowManager: ${e.message}", e)
@@ -216,8 +238,6 @@ class AppBlockerService : Service() {
         val windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
         try {
             windowManager.removeView(view)
-            lifecycleOwner?.stop()
-            lifecycleOwner = null
             overlayView = null
             Log.i(TAG, "Blocker overlay removed from WindowManager successfully.")
         } catch (e: Exception) {
