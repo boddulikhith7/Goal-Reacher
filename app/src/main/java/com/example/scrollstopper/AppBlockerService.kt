@@ -127,7 +127,7 @@ class AppBlockerService : Service() {
     private fun getForegroundPackageName(): String? {
         val usageStatsManager = getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
         val endTime = System.currentTimeMillis()
-        val startTime = endTime - 10000 // Look back 10 seconds
+        val startTime = endTime - 60000 // Look back 60 seconds (safe against clock drifts)
         val usageEvents = usageStatsManager.queryEvents(startTime, endTime)
 
         var latestApp: String? = null
@@ -135,7 +135,8 @@ class AppBlockerService : Service() {
         val event = UsageEvents.Event()
         while (usageEvents.hasNextEvent()) {
             usageEvents.getNextEvent(event)
-            if (event.eventType == UsageEvents.Event.MOVE_TO_FOREGROUND) {
+            // Match standard MOVE_TO_FOREGROUND (1) and ACTIVITY_RESUMED (19) event states
+            if (event.eventType == UsageEvents.Event.MOVE_TO_FOREGROUND || event.eventType == 19) {
                 if (event.timeStamp > latestTime) {
                     latestApp = event.packageName
                     latestTime = event.timeStamp
