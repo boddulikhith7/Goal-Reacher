@@ -128,6 +128,14 @@ class AppBlockerService : Service() {
             // 3. We are currently inside a scheduled, uncompleted study block
             if ((isCoolDownBlocked || prefManager.strictMode || inActiveStudyBlock) && !isBypassed) {
                 Log.i(TAG, "Blocking active foreground application: $currentApp")
+                
+                // Instantly redirect to Home screen to send YouTube to the background and stop playback
+                val homeIntent = Intent(Intent.ACTION_MAIN).apply {
+                    addCategory(Intent.CATEGORY_HOME)
+                    flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                }
+                startActivity(homeIntent)
+
                 handler.post {
                     showBlockerOverlay()
                 }
@@ -167,6 +175,21 @@ class AppBlockerService : Service() {
                     WindowManager.LayoutParams.FLAG_FULLSCREEN,
             PixelFormat.TRANSLUCENT
         )
+
+        // Request Audio Focus to instantly pause YouTube audio/video playback
+        val audioManager = getSystemService(Context.AUDIO_SERVICE) as android.media.AudioManager
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                val focusRequest = android.media.AudioFocusRequest.Builder(android.media.AudioManager.AUDIOFOCUS_GAIN_TRANSIENT)
+                    .build()
+                audioManager.requestAudioFocus(focusRequest)
+            } else {
+                @Suppress("DEPRECATION")
+                audioManager.requestAudioFocus(null, android.media.AudioManager.STREAM_MUSIC, android.media.AudioManager.AUDIOFOCUS_GAIN_TRANSIENT)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to request audio focus: ${e.message}")
+        }
 
         // Create standard LinearLayout layout programmatically
         val layout = android.widget.LinearLayout(this).apply {
