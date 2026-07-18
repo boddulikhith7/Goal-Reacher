@@ -43,6 +43,7 @@ class AppBlockerService : Service() {
     private lateinit var prefManager: PreferenceManager
     private val checkInterval = 1000L // 1 second
     private var overlayView: android.view.View? = null
+    private var youtubeTimeStarted: Long = 0L
 
     private val checkRunnable = object : Runnable {
         override fun run() {
@@ -96,6 +97,31 @@ class AppBlockerService : Service() {
                 !block.isCompleted && isTimeInBlock(block.timeRange)
             }
 
+            // In Non-Strict Mode, we track time spent in YouTube to simulate scroll limit (e.g., 10 seconds per scroll limit unit)
+            if (!prefManager.strictMode && !inActiveStudyBlock && !isCoolDownBlocked && !isBypassed) {
+                if (youtubeTimeStarted == 0L) {
+                    youtubeTimeStarted = now
+                    Log.i(TAG, "User opened YouTube. Timer started.")
+                } else {
+                    val timeSpentMs = now - youtubeTimeStarted
+                    val limitMs = prefManager.scrollLimit * 10000L // 10s per scroll unit (e.g. 3 limit = 30 seconds)
+                    Log.i(TAG, "YouTube usage: ${timeSpentMs / 1000}s / ${limitMs / 1000}s limit")
+                    
+                    if (timeSpentMs >= limitMs) {
+                        Log.i(TAG, "Usage limit reached! Triggering cooldown block.")
+                        // Activate cooldown block
+                        val pauseMillis = prefManager.pauseDurationSeconds * 1000L
+                        prefManager.blockUntilTimestamp = now + pauseMillis
+                        prefManager.totalBlocksToday += 1
+                        prefManager.timeSavedMinutes += 15 // Estimate 15 minutes saved
+                        youtubeTimeStarted = 0L
+                    }
+                }
+            } else {
+                // Reset timer when blocked by study time/cooldown or strict mode is active
+                youtubeTimeStarted = 0L
+            }
+
             // Block if:
             // 1. We are in a cool-down block
             // 2. Strict Mode is enabled
@@ -111,6 +137,9 @@ class AppBlockerService : Service() {
                 }
             }
         } else {
+            // Reset timer if they exit YouTube
+            youtubeTimeStarted = 0L
+            
             // Remove the overlay if they exit YouTube and are on any allowed app (not our own)
             if (currentApp != packageName) {
                 handler.post {
