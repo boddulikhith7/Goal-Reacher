@@ -84,8 +84,8 @@ class AppBlockerService : Service() {
         val currentApp = getForegroundPackageName() ?: return
         Log.i(TAG, "Foreground Check: detectedApp=$currentApp | strictMode=${prefManager.strictMode} | isBlocked=${prefManager.isCurrentlyBlocked}")
 
-        // Targeted apps to block
-        val blockedApps = listOf("com.google.android.youtube")
+        // Targeted apps to block: YouTube and Instagram
+        val blockedApps = listOf("com.google.android.youtube", "com.instagram.android")
 
         if (blockedApps.contains(currentApp)) {
             val now = System.currentTimeMillis()
@@ -97,15 +97,15 @@ class AppBlockerService : Service() {
                 !block.isCompleted && isTimeInBlock(block.timeRange)
             }
 
-            // In Non-Strict Mode, we track time spent in YouTube to simulate scroll limit (e.g., 10 seconds per scroll limit unit)
+            // In Non-Strict Mode, we track time spent in blocked apps to simulate scroll limit (e.g., 10 seconds per scroll limit unit)
             if (!prefManager.strictMode && !inActiveStudyBlock && !isCoolDownBlocked && !isBypassed) {
                 if (youtubeTimeStarted == 0L) {
                     youtubeTimeStarted = now
-                    Log.i(TAG, "User opened YouTube. Timer started.")
+                    Log.i(TAG, "User opened blocked app: $currentApp. Timer started.")
                 } else {
                     val timeSpentMs = now - youtubeTimeStarted
                     val limitMs = prefManager.scrollLimit * 10000L // 10s per scroll unit (e.g. 3 limit = 30 seconds)
-                    Log.i(TAG, "YouTube usage: ${timeSpentMs / 1000}s / ${limitMs / 1000}s limit")
+                    Log.i(TAG, "App usage for $currentApp: ${timeSpentMs / 1000}s / ${limitMs / 1000}s limit")
                     
                     if (timeSpentMs >= limitMs) {
                         Log.i(TAG, "Usage limit reached! Triggering cooldown block.")
@@ -129,7 +129,7 @@ class AppBlockerService : Service() {
             if ((isCoolDownBlocked || prefManager.strictMode || inActiveStudyBlock) && !isBypassed) {
                 Log.i(TAG, "Blocking active foreground application: $currentApp")
                 
-                // Instantly redirect to Home screen to send YouTube to the background and stop playback
+                // Instantly redirect to Home screen to send YouTube/Instagram to the background and stop playback
                 val homeIntent = Intent(Intent.ACTION_MAIN).apply {
                     addCategory(Intent.CATEGORY_HOME)
                     flags = Intent.FLAG_ACTIVITY_NEW_TASK
@@ -137,7 +137,7 @@ class AppBlockerService : Service() {
                 startActivity(homeIntent)
 
                 handler.post {
-                    showBlockerOverlay()
+                    showBlockerOverlay(currentApp)
                 }
             } else {
                 handler.post {
@@ -145,10 +145,10 @@ class AppBlockerService : Service() {
                 }
             }
         } else {
-            // Reset timer if they exit YouTube
+            // Reset timer if they exit YouTube/Instagram
             youtubeTimeStarted = 0L
             
-            // Remove the overlay if they exit YouTube and are on any allowed app (not our own)
+            // Remove the overlay if they exit the blocked app and are on any allowed app (not our own)
             if (currentApp != packageName) {
                 handler.post {
                     removeBlockerOverlay()
@@ -157,7 +157,7 @@ class AppBlockerService : Service() {
         }
     }
 
-    private fun showBlockerOverlay() {
+    private fun showBlockerOverlay(currentApp: String) {
         if (overlayView != null) return // Already showing
 
         val windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
@@ -241,9 +241,10 @@ class AppBlockerService : Service() {
         }
         layout.addView(quoteText)
 
-        // Exit Button
+        // Exit Button - Dynamically adjusts label to the blocked app
+        val appLabel = if (currentApp.contains("instagram")) "Instagram" else "YouTube"
         val exitButton = android.widget.Button(this).apply {
-            text = "Exit YouTube"
+            text = "Exit $appLabel"
             setTextColor(android.graphics.Color.WHITE)
             textSize = 16f
             gravity = android.view.Gravity.CENTER
