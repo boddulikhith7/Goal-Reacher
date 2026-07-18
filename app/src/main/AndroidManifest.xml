@@ -1,6 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <!-- Custom Signature Permission for Companion App Sync -->
+    <permission 
+        android:name="com.example.scrollstopper.permission.SEND_XP" 
+        android:protectionLevel="signature" />
+
     <!-- Alarms & Notifications Permissions -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
@@ -72,6 +77,7 @@
         <receiver
             android:name=".XpReceiver"
             android:exported="true"
+            android:permission="com.example.scrollstopper.permission.SEND_XP"
             android:enabled="true">
             <intent-filter>
                 <action android:name="com.example.scrollstopper.ADD_XP" />
