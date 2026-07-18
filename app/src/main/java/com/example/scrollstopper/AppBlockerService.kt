@@ -40,7 +40,7 @@ class AppBlockerService : Service() {
         
         // Start loop
         handler.post(checkRunnable)
-        Log.d(TAG, "AppBlockerService created and monitoring loop started")
+        Log.i(TAG, "AppBlockerService created and monitoring loop started")
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -50,13 +50,14 @@ class AppBlockerService : Service() {
     override fun onDestroy() {
         super.onDestroy()
         handler.removeCallbacks(checkRunnable)
-        Log.d(TAG, "AppBlockerService destroyed")
+        Log.i(TAG, "AppBlockerService destroyed")
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
 
     private fun checkForegroundApp() {
         val currentApp = getForegroundPackageName() ?: return
+        Log.i(TAG, "Foreground Check: detectedApp=$currentApp | strictMode=${prefManager.strictMode} | isBlocked=${prefManager.isCurrentlyBlocked}")
 
         // Targeted apps to block
         val blockedApps = listOf("com.google.android.youtube")
@@ -76,7 +77,7 @@ class AppBlockerService : Service() {
             // 2. Strict Mode is enabled
             // 3. We are currently inside a scheduled, uncompleted study block
             if ((isCoolDownBlocked || prefManager.strictMode || inActiveStudyBlock) && !isBypassed) {
-                Log.d(TAG, "Blocking active foreground application: $currentApp")
+                Log.i(TAG, "Blocking active foreground application: $currentApp")
                 
                 val blockerIntent = Intent(this, BlockerActivity::class.java).apply {
                     flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
@@ -140,6 +141,22 @@ class AppBlockerService : Service() {
                 if (event.timeStamp > latestTime) {
                     latestApp = event.packageName
                     latestTime = event.timeStamp
+                }
+            }
+        }
+
+        // Fallback: if queryEvents returned nothing, query usage stats
+        if (latestApp == null) {
+            val stats = usageStatsManager.queryUsageStats(
+                UsageStatsManager.INTERVAL_DAILY,
+                endTime - 1000 * 60 * 5, // 5 minutes lookback
+                endTime
+            )
+            if (!stats.isNullOrEmpty()) {
+                val sortedStats = stats.sortedByDescending { it.lastTimeUsed }
+                val mostRecent = sortedStats.first()
+                if (endTime - mostRecent.lastTimeUsed < 15000) { // Used in the last 15 seconds
+                    latestApp = mostRecent.packageName
                 }
             }
         }
