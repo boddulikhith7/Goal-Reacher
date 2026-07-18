@@ -3,7 +3,7 @@ package com.example.scrollstopper.ui.main
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.scrollstopper.ScrollStopperAccessibilityService
+import com.example.scrollstopper.AppBlockerService
 import com.example.scrollstopper.data.BlockType
 import com.example.scrollstopper.data.ErrorLogItem
 import com.example.scrollstopper.data.PreferenceManager
@@ -27,7 +27,7 @@ data class MainUiState(
     val scrollLimit: Int = 5,
     val pauseDurationSeconds: Int = 15,
     val strictMode: Boolean = false,
-    val isAccessibilityActive: Boolean = false,
+    val isBlockerServiceActive: Boolean = false,
     val questName: String = "GATE EEE Quest",
     val examDateMillis: Long = 0L,
     val geminiApiKey: String = "",
@@ -47,7 +47,15 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
 
     fun refreshState() {
         prefManager.checkDayTransition()
-        val isActive = ScrollStopperAccessibilityService.isServiceEnabled(getApplication())
+        val isUsageGranted = AppBlockerService.isUsageAccessGranted(getApplication())
+        if (isUsageGranted) {
+            val intent = android.content.Intent(getApplication(), AppBlockerService::class.java)
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                getApplication<Application>().startForegroundService(intent)
+            } else {
+                getApplication<Application>().startService(intent)
+            }
+        }
         _uiState.update {
             MainUiState(
                 xp = prefManager.xp,
@@ -61,7 +69,7 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
                 scrollLimit = prefManager.scrollLimit,
                 pauseDurationSeconds = prefManager.pauseDurationSeconds,
                 strictMode = prefManager.strictMode,
-                isAccessibilityActive = isActive,
+                isBlockerServiceActive = isUsageGranted,
                 questName = prefManager.questName,
                 examDateMillis = prefManager.examDateMillis,
                 geminiApiKey = prefManager.geminiApiKey,

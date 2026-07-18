@@ -166,7 +166,7 @@ fun TodayScreen(
             }
         }
 
-        // Accessibility Quick-Toggle Helper Card
+        // Focus Blocker (Usage Access) Control Card
         item {
             val context = LocalContext.current
             Card(
@@ -174,7 +174,7 @@ fun TodayScreen(
                     .fillMaxWidth()
                     .clickable {
                         try {
-                            val intent = android.content.Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS)
+                            val intent = android.content.Intent(android.provider.Settings.ACTION_USAGE_ACCESS_SETTINGS)
                             context.startActivity(intent)
                         } catch (e: Exception) {
                             // Fallback
@@ -182,7 +182,7 @@ fun TodayScreen(
                     },
                 shape = RoundedCornerShape(16.dp),
                 colors = CardDefaults.cardColors(
-                    containerColor = if (state.isAccessibilityActive) {
+                    containerColor = if (state.isBlockerServiceActive) {
                         Color(0xFF065F46).copy(alpha = 0.15f) // Emerald tinted dark green
                     } else {
                         Color(0xFF991B1B).copy(alpha = 0.15f) // Ruby tinted dark red
@@ -190,7 +190,7 @@ fun TodayScreen(
                 ),
                 border = BorderStroke(
                     width = 1.dp,
-                    color = if (state.isAccessibilityActive) {
+                    color = if (state.isBlockerServiceActive) {
                         Color(0xFF10B981).copy(alpha = 0.3f)
                     } else {
                         Color(0xFFEF4444).copy(alpha = 0.3f)
@@ -203,22 +203,22 @@ fun TodayScreen(
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     Text(
-                        text = if (state.isAccessibilityActive) "🛡️" else "⚠️",
+                        text = if (state.isBlockerServiceActive) "🛡️" else "⚠️",
                         fontSize = 24.sp
                     )
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = if (state.isAccessibilityActive) "Scroll Shield is Active" else "Scroll Shield is Paused",
+                            text = if (state.isBlockerServiceActive) "Focus Shield is Active" else "Focus Shield is Paused",
                             fontWeight = FontWeight.Bold,
                             fontSize = 14.sp,
                             color = Color.White
                         )
                         Spacer(modifier = Modifier.height(2.dp))
                         Text(
-                            text = if (state.isAccessibilityActive) {
-                                "Paying with Paytm? Tap here to temporarily disable the accessibility service to avoid blocks."
+                            text = if (state.isBlockerServiceActive) {
+                                "Goal Reacher is running in the background. Tap here to manage App Usage Access if needed."
                             } else {
-                                "Tap here to enable focus protection in Android Accessibility Settings for your study blocks."
+                                "Tap here to enable Usage Access permission in Android Settings so Goal Reacher can protect your study blocks."
                             },
                             fontSize = 11.sp,
                             color = Color.White.copy(alpha = 0.7f),

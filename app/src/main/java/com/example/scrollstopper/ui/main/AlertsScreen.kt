@@ -29,7 +29,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
-import com.example.scrollstopper.ScrollStopperAccessibilityService
 import com.example.scrollstopper.data.BlockType
 import com.example.scrollstopper.data.TimetableBlock
 import com.example.scrollstopper.notifications.AlarmReceiver
@@ -237,9 +236,9 @@ fun AlertsScreen(
             }
         }
 
-        // Scroll Shield status card
+        // Focus Blocker Shield status card
         item {
-            val isActive = state.isAccessibilityActive
+            val isActive = state.isBlockerServiceActive
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(16.dp),
@@ -253,7 +252,7 @@ fun AlertsScreen(
                     ) {
                         Column {
                             Text(
-                                text = "🛡️ Scroll Shield (ScrollStopper)",
+                                text = "🛡️ Focus Blocker Shield",
                                 fontSize = 14.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = Color.White
@@ -268,7 +267,7 @@ fun AlertsScreen(
                         
                         Button(
                             onClick = {
-                                val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).apply {
+                                val intent = Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS).apply {
                                     flags = Intent.FLAG_ACTIVITY_NEW_TASK
                                 }
                                 context.startActivity(intent)
@@ -278,7 +277,7 @@ fun AlertsScreen(
                             )
                         ) {
                             Text(
-                                text = if (isActive) "Configure" else "Turn On",
+                                text = if (isActive) "Settings" else "Grant Access",
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold
                             )
@@ -291,13 +290,13 @@ fun AlertsScreen(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clip(RoundedCornerShape(8.dp))
-                                .background(Color(0xFFEF4444).copy(alpha = 0.08f))
+                                .background(Color(0xFF065F46).copy(alpha = 0.08f))
                                 .padding(10.dp)
                         ) {
                             Text(
-                                text = "⚠️ Paytm/Banking Warning: Payment apps block transactions while third-party accessibility tools are active. If Paytm displays a security error, tap 'Configure' above and temporarily turn off Goal Reacher.",
+                                text = "✓ App blocker is active. Usage Access is highly secure, does not read screen content/passwords, and is 100% compatible with Paytm and other payment applications.",
                                 fontSize = 11.sp,
-                                color = Color(0xFFFCA5A5),
+                                color = Color(0xFF34D399),
                                 lineHeight = 15.sp
                             )
                         }

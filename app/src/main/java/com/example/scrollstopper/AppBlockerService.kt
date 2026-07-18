@@ -1,0 +1,137 @@
+package com.example.scrollstopper
+
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.Service
+import android.app.usage.UsageEvents
+import android.app.usage.UsageStatsManager
+import android.content.Context
+import android.content.Intent
+import android.os.Build
+import android.os.Handler
+import android.os.IBinder
+import android.os.Looper
+import android.util.Log
+import androidx.core.app.NotificationCompat
+import com.example.scrollstopper.data.PreferenceManager
+
+class AppBlockerService : Service() {
+
+    private lateinit var handler: Handler
+    private lateinit var prefManager: PreferenceManager
+    private val checkInterval = 1000L // 1 second
+
+    private val checkRunnable = object : Runnable {
+        override fun run() {
+            checkForegroundApp()
+            handler.postDelayed(this, checkInterval)
+        }
+    }
+
+    override fun onCreate() {
+        super.onCreate()
+        prefManager = PreferenceManager(applicationContext)
+        handler = Handler(Looper.getMainLooper())
+        
+        // Start service as foreground
+        startForegroundServiceNotification()
+        
+        // Start loop
+        handler.post(checkRunnable)
+        Log.d(TAG, "AppBlockerService created and monitoring loop started")
+    }
+
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        return START_STICKY
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        handler.removeCallbacks(checkRunnable)
+        Log.d(TAG, "AppBlockerService destroyed")
+    }
+
+    override fun onBind(intent: Intent?): IBinder? = null
+
+    private fun checkForegroundApp() {
+        val currentApp = getForegroundPackageName() ?: return
+
+        // Targeted apps to block
+        val blockedApps = listOf("com.google.android.youtube")
+
+        if (blockedApps.contains(currentApp)) {
+            val now = System.currentTimeMillis()
+            val isCoolDownBlocked = prefManager.isCurrentlyBlocked
+            val isBypassed = now < prefManager.emergencyBypassUntil
+
+            // If strictMode is active OR the cooldown block is active, block YouTube
+            if ((isCoolDownBlocked || prefManager.strictMode) && !isBypassed) {
+                Log.d(TAG, "Blocking active foreground application: $currentApp")
+                
+                val blockerIntent = Intent(this, BlockerActivity::class.java).apply {
+                    flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+                }
+                startActivity(blockerIntent)
+            }
+        }
+    }
+
+    private fun getForegroundPackageName(): String? {
+        val usageStatsManager = getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
+        val endTime = System.currentTimeMillis()
+        val startTime = endTime - 10000 // Look back 10 seconds
+        val usageEvents = usageStatsManager.queryEvents(startTime, endTime)
+
+        var latestApp: String? = null
+        var latestTime = 0L
+        val event = UsageEvents.Event()
+        while (usageEvents.hasNextEvent()) {
+            usageEvents.getNextEvent(event)
+            if (event.eventType == UsageEvents.Event.MOVE_TO_FOREGROUND) {
+                if (event.timeStamp > latestTime) {
+                    latestApp = event.packageName
+                    latestTime = event.timeStamp
+                }
+            }
+        }
+        return latestApp
+    }
+
+    private fun startForegroundServiceNotification() {
+        val channelId = "app_blocker_channel"
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = NotificationChannel(
+                channelId,
+                "Focus Shield Service",
+                NotificationManager.IMPORTANCE_LOW
+            )
+            val manager = getSystemService(NotificationManager::class.java)
+            manager.createNotificationChannel(channel)
+        }
+
+        // Use a generic lock icon available on all versions of Android
+        val notification = NotificationCompat.Builder(this, channelId)
+            .setContentTitle("Focus Shield Active")
+            .setContentText("Goal Reacher is protecting your study session.")
+            .setSmallIcon(android.R.drawable.ic_lock_lock)
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .build()
+
+        startForeground(101, notification)
+    }
+
+    companion object {
+        private const val TAG = "AppBlockerService"
+        
+        fun isUsageAccessGranted(context: Context): Boolean {
+            val usageStatsManager = context.getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
+            val endTime = System.currentTimeMillis()
+            val stats = usageStatsManager.queryUsageStats(
+                UsageStatsManager.INTERVAL_DAILY,
+                endTime - 1000 * 60,
+                endTime
+            )
+            return !stats.isNullOrEmpty()
+        }
+    }
+}
