@@ -14,6 +14,7 @@ import android.os.Looper
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.example.scrollstopper.data.PreferenceManager
+import java.util.Calendar
 
 class AppBlockerService : Service() {
 
@@ -64,8 +65,16 @@ class AppBlockerService : Service() {
             val isCoolDownBlocked = prefManager.isCurrentlyBlocked
             val isBypassed = now < prefManager.emergencyBypassUntil
 
-            // If strictMode is active OR the cooldown block is active, block YouTube
-            if ((isCoolDownBlocked || prefManager.strictMode) && !isBypassed) {
+            // Determine if we are currently inside an active, uncompleted study block
+            val inActiveStudyBlock = prefManager.customBlocks.any { block ->
+                !block.isCompleted && isTimeInBlock(block.timeRange)
+            }
+
+            // Block if:
+            // 1. We are in a cool-down block
+            // 2. Strict Mode is enabled
+            // 3. We are currently inside a scheduled, uncompleted study block
+            if ((isCoolDownBlocked || prefManager.strictMode || inActiveStudyBlock) && !isBypassed) {
                 Log.d(TAG, "Blocking active foreground application: $currentApp")
                 
                 val blockerIntent = Intent(this, BlockerActivity::class.java).apply {
@@ -74,6 +83,44 @@ class AppBlockerService : Service() {
                 startActivity(blockerIntent)
             }
         }
+    }
+
+    private fun isTimeInBlock(timeRange: String): Boolean {
+        val parts = timeRange.split("-")
+        if (parts.size != 2) return false
+        val start = parseTime(parts[0].trim()) ?: return false
+        val end = parseTime(parts[1].trim()) ?: return false
+        
+        val nowCalendar = Calendar.getInstance()
+        val nowMinutes = nowCalendar.get(Calendar.HOUR_OF_DAY) * 60 + nowCalendar.get(Calendar.MINUTE)
+        
+        return if (start <= end) {
+            nowMinutes in start..end
+        } else {
+            nowMinutes >= start || nowMinutes <= end
+        }
+    }
+
+    private fun parseTime(timeStr: String): Int? {
+        val clean = timeStr.uppercase().trim()
+        val isPM = clean.contains("PM")
+        val isAM = clean.contains("AM")
+        val timeParts = clean.replace("AM", "").replace("PM", "").trim().split(":")
+        if (timeParts.isEmpty()) return null
+        
+        var hour = timeParts[0].toIntOrNull() ?: return null
+        var minute = 0
+        if (timeParts.size > 1) {
+            minute = timeParts[1].toIntOrNull() ?: 0
+        }
+        
+        if (isPM && hour < 12) {
+            hour += 12
+        } else if (isAM && hour == 12) {
+            hour = 0
+        }
+        
+        return hour * 60 + minute
     }
 
     private fun getForegroundPackageName(): String? {
