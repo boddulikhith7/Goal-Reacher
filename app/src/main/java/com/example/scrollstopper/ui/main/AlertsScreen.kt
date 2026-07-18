@@ -267,8 +267,14 @@ fun AlertsScreen(
                         
                         Button(
                             onClick = {
-                                val intent = Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS).apply {
-                                    flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                                val intent = if (!state.isUsageAccessGranted) {
+                                    Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS).apply {
+                                        flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                                    }
+                                } else {
+                                    Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION).apply {
+                                        flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                                    }
                                 }
                                 context.startActivity(intent)
                             },
@@ -277,7 +283,13 @@ fun AlertsScreen(
                             )
                         ) {
                             Text(
-                                text = if (isActive) "Settings" else "Grant Access",
+                                text = if (isActive) {
+                                    "Settings"
+                                } else if (!state.isUsageAccessGranted) {
+                                    "Usage Access"
+                                } else {
+                                    "Overlay"
+                                },
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold
                             )

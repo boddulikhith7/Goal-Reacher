@@ -166,23 +166,39 @@ fun TodayScreen(
             }
         }
 
-        // Focus Blocker (Usage Access) Control Card
+        // Focus Blocker (Usage Access + Overlay) Control Card
         item {
             val context = LocalContext.current
+            val isUsageGranted = state.isUsageAccessGranted
+            val isOverlayGranted = state.isOverlayGranted
+            val isActive = state.isBlockerServiceActive
+
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clickable {
                         try {
-                            val intent = android.content.Intent(android.provider.Settings.ACTION_USAGE_ACCESS_SETTINGS)
-                            context.startActivity(intent)
+                            if (!isUsageGranted) {
+                                val intent = android.content.Intent(android.provider.Settings.ACTION_USAGE_ACCESS_SETTINGS)
+                                context.startActivity(intent)
+                            } else if (!isOverlayGranted) {
+                                val intent = android.content.Intent(
+                                    android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                                    android.net.Uri.parse("package:${context.packageName}")
+                                )
+                                context.startActivity(intent)
+                            }
                         } catch (e: Exception) {
-                            // Fallback
+                            // Fallback if package Uri fails on some OS builds
+                            try {
+                                val intent = android.content.Intent(android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION)
+                                context.startActivity(intent)
+                            } catch (ex: Exception) {}
                         }
                     },
                 shape = RoundedCornerShape(16.dp),
                 colors = CardDefaults.cardColors(
-                    containerColor = if (state.isBlockerServiceActive) {
+                    containerColor = if (isActive) {
                         Color(0xFF065F46).copy(alpha = 0.15f) // Emerald tinted dark green
                     } else {
                         Color(0xFF991B1B).copy(alpha = 0.15f) // Ruby tinted dark red
@@ -190,7 +206,7 @@ fun TodayScreen(
                 ),
                 border = BorderStroke(
                     width = 1.dp,
-                    color = if (state.isBlockerServiceActive) {
+                    color = if (isActive) {
                         Color(0xFF10B981).copy(alpha = 0.3f)
                     } else {
                         Color(0xFFEF4444).copy(alpha = 0.3f)
@@ -203,22 +219,30 @@ fun TodayScreen(
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     Text(
-                        text = if (state.isBlockerServiceActive) "🛡️" else "⚠️",
+                        text = if (isActive) "🛡️" else "⚠️",
                         fontSize = 24.sp
                     )
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = if (state.isBlockerServiceActive) "Focus Shield is Active" else "Focus Shield is Paused",
+                            text = if (isActive) {
+                                "Focus Shield is Active"
+                            } else if (!isUsageGranted) {
+                                "Usage Access Required"
+                            } else {
+                                "Overlay Permission Required"
+                            },
                             fontWeight = FontWeight.Bold,
                             fontSize = 14.sp,
                             color = Color.White
                         )
                         Spacer(modifier = Modifier.height(2.dp))
                         Text(
-                            text = if (state.isBlockerServiceActive) {
-                                "Goal Reacher is running in the background. Tap here to manage App Usage Access if needed."
+                            text = if (isActive) {
+                                "Goal Reacher is active in the background and fully compatible with Paytm. Tap to configure."
+                            } else if (!isUsageGranted) {
+                                "Tap here to enable Usage Access permission in Android Settings so we can check active apps."
                             } else {
-                                "Tap here to enable Usage Access permission in Android Settings so Goal Reacher can protect your study blocks."
+                                "Tap here to allow Goal Reacher to 'Display over other apps' so it can show the blocker screen."
                             },
                             fontSize = 11.sp,
                             color = Color.White.copy(alpha = 0.7f),

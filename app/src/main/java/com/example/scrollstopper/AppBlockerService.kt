@@ -1,5 +1,6 @@
 package com.example.scrollstopper
 
+import android.app.AppOpsManager
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.Service
@@ -171,14 +172,30 @@ class AppBlockerService : Service() {
         private const val TAG = "AppBlockerService"
         
         fun isUsageAccessGranted(context: Context): Boolean {
-            val usageStatsManager = context.getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
-            val endTime = System.currentTimeMillis()
-            val stats = usageStatsManager.queryUsageStats(
-                UsageStatsManager.INTERVAL_DAILY,
-                endTime - 1000 * 60,
-                endTime
-            )
-            return !stats.isNullOrEmpty()
+            val appOps = context.getSystemService(Context.APP_OPS_SERVICE) as AppOpsManager
+            val mode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                appOps.unsafeCheckOpNoThrow(
+                    AppOpsManager.OPSTR_GET_USAGE_STATS,
+                    android.os.Process.myUid(),
+                    context.packageName
+                )
+            } else {
+                @Suppress("DEPRECATION")
+                appOps.checkOpNoThrow(
+                    AppOpsManager.OPSTR_GET_USAGE_STATS,
+                    android.os.Process.myUid(),
+                    context.packageName
+                )
+            }
+            return mode == AppOpsManager.MODE_ALLOWED
+        }
+
+        fun isOverlayGranted(context: Context): Boolean {
+            return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                android.provider.Settings.canDrawOverlays(context)
+            } else {
+                true
+            }
         }
     }
 }
