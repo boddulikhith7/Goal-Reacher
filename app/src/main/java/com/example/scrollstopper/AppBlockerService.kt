@@ -88,48 +88,64 @@ class AppBlockerService : Service() {
         val now = System.currentTimeMillis()
         
         val blockedApps = listOf("com.google.android.youtube", "com.instagram.android")
+        val settingsPackages = listOf(
+            "com.android.settings",
+            "com.android.packageinstaller",
+            "com.google.android.packageinstaller"
+        )
+        
         val isAppBlocked = currentApp != null && blockedApps.contains(currentApp)
         
-        if (isAppBlocked) {
+        var isCoolDownBlocked = prefManager.isCurrentlyBlocked
+        val isBypassed = now < prefManager.emergencyBypassUntil
+        val inActiveStudyBlock = prefManager.customBlocks.any { block ->
+            !block.isCompleted && isTimeInBlock(block.timeRange)
+        }
+        val isFocusActive = (isCoolDownBlocked || prefManager.strictMode || inActiveStudyBlock) && !isBypassed
+        val permissionsGranted = isUsageAccessGranted(this) && isOverlayGranted(this)
+        
+        val isSettingsBlocked = currentApp != null && settingsPackages.contains(currentApp) && isFocusActive && permissionsGranted
+        
+        if (isAppBlocked || isSettingsBlocked) {
             lastActiveTime = now
             
-            if (lastCheckedTime > 0L) {
-                val elapsed = now - lastCheckedTime
-                accumulatedBlockedTimeMs += elapsed
-            }
-            lastCheckedTime = now
-            
-            var isCoolDownBlocked = prefManager.isCurrentlyBlocked
-            val isBypassed = now < prefManager.emergencyBypassUntil
-            val inActiveStudyBlock = prefManager.customBlocks.any { block ->
-                !block.isCompleted && isTimeInBlock(block.timeRange)
-            }
-            
-            // In Non-Strict Mode, we track total accumulated time in blocked apps to simulate scroll limit (10s per unit)
-            if (!prefManager.strictMode && !inActiveStudyBlock && !isCoolDownBlocked && !isBypassed) {
-                val limitMs = prefManager.scrollLimit * 10000L // 10s per scroll unit (e.g. 3 limit = 30 seconds)
-                Log.i(TAG, "Accumulated blocked app usage: ${accumulatedBlockedTimeMs / 1000}s / ${limitMs / 1000}s limit")
+            if (isAppBlocked) {
+                if (lastCheckedTime > 0L) {
+                    val elapsed = now - lastCheckedTime
+                    accumulatedBlockedTimeMs += elapsed
+                }
+                lastCheckedTime = now
                 
-                if (accumulatedBlockedTimeMs >= limitMs) {
-                    Log.i(TAG, "Usage limit reached! Triggering cooldown block.")
-                    // Activate cooldown block
-                    val pauseMillis = prefManager.pauseDurationSeconds * 1000L
-                    prefManager.blockUntilTimestamp = now + pauseMillis
-                    prefManager.totalBlocksToday += 1
-                    prefManager.timeSavedMinutes += 15 // Estimate 15 minutes saved
-                    isCoolDownBlocked = true // Force immediately to block on this pass
+                // In Non-Strict Mode, we track total accumulated time in blocked apps to simulate scroll limit (10s per unit)
+                if (!prefManager.strictMode && !inActiveStudyBlock && !isCoolDownBlocked && !isBypassed) {
+                    val limitMs = prefManager.scrollLimit * 10000L // 10s per scroll unit (e.g. 3 limit = 30 seconds)
+                    Log.i(TAG, "Accumulated blocked app usage: ${accumulatedBlockedTimeMs / 1000}s / ${limitMs / 1000}s limit")
+                    
+                    if (accumulatedBlockedTimeMs >= limitMs) {
+                        Log.i(TAG, "Usage limit reached! Triggering cooldown block.")
+                        // Activate cooldown block
+                        val pauseMillis = prefManager.pauseDurationSeconds * 1000L
+                        prefManager.blockUntilTimestamp = now + pauseMillis
+                        prefManager.totalBlocksToday += 1
+                        prefManager.timeSavedMinutes += 15 // Estimate 15 minutes saved
+                        isCoolDownBlocked = true // Force immediately to block on this pass
+                        accumulatedBlockedTimeMs = 0L
+                    }
+                } else {
+                    // Reset accumulated timer when blocked by study time/cooldown or strict mode is active
                     accumulatedBlockedTimeMs = 0L
                 }
             } else {
-                // Reset accumulated timer when blocked by study time/cooldown or strict mode is active
-                accumulatedBlockedTimeMs = 0L
+                // Settings block: do not run timer or accumulate scroll limit time
+                lastCheckedTime = now
             }
             
             // Block if:
-            // 1. We are in a cool-down block
-            // 2. Strict Mode is enabled
-            // 3. We are currently inside a scheduled, uncompleted study block
-            if ((isCoolDownBlocked || prefManager.strictMode || inActiveStudyBlock) && !isBypassed) {
+            // 1. Settings blocker condition is true
+            // 2. Standard app blocker condition is true
+            val shouldShowOverlay = isSettingsBlocked || ((isCoolDownBlocked || prefManager.strictMode || inActiveStudyBlock) && !isBypassed)
+            
+            if (shouldShowOverlay) {
                 Log.i(TAG, "Blocking active foreground application: $currentApp")
                 
                 handler.post {
@@ -242,105 +258,127 @@ class AppBlockerService : Service() {
         }
         layout.addView(quoteText)
 
-        val appLabel = if (currentApp.contains("instagram")) "Instagram" else "YouTube"
-
-        // Blocker Quiz Section
-        val challengeText = android.widget.TextView(this).apply {
-            text = "Answer this Focus Quiz to unlock a 5-minute break pass!"
-            textSize = 12f
-            setTextColor(android.graphics.Color.parseColor("#9CA3AF"))
-            gravity = android.view.Gravity.CENTER
-            val layoutParams = android.widget.LinearLayout.LayoutParams(
-                android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
-                android.widget.LinearLayout.LayoutParams.WRAP_CONTENT
-            ).apply {
-                setMargins(0, 0, 0, 16)
-            }
-            this.layoutParams = layoutParams
+        val isSettingsApp = currentApp.contains("settings") || currentApp.contains("packageinstaller")
+        val appLabel = when {
+            isSettingsApp -> "Settings"
+            currentApp.contains("instagram") -> "Instagram"
+            else -> "YouTube"
         }
-        layout.addView(challengeText)
 
-        val q = getBlockerQuestion()
-        val qText = android.widget.TextView(this).apply {
-            text = q.question
-            textSize = 16f
-            setTextColor(android.graphics.Color.WHITE)
-            gravity = android.view.Gravity.CENTER
-            val layoutParams = android.widget.LinearLayout.LayoutParams(
-                android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
-                android.widget.LinearLayout.LayoutParams.WRAP_CONTENT
-            ).apply {
-                setMargins(16, 0, 16, 24)
-            }
-            this.layoutParams = layoutParams
-        }
-        layout.addView(qText)
-
-        q.options.forEachIndexed { index, option ->
-            val btn = android.widget.Button(this).apply {
-                text = option
-                setTextColor(android.graphics.Color.WHITE)
-                textSize = 13f
+        if (isSettingsApp) {
+            val alertMessage = android.widget.TextView(this).apply {
+                text = "System settings are locked during active focus periods to prevent force-stopping or uninstalling the blocker. Finish your session or wait for the cooldown to access settings."
+                textSize = 14f
+                setTextColor(android.graphics.Color.parseColor("#EF4444")) // Red warning color
                 gravity = android.view.Gravity.CENTER
-                
-                val shape = android.graphics.drawable.GradientDrawable().apply {
-                    shape = android.graphics.drawable.GradientDrawable.RECTANGLE
-                    cornerRadius = 16f
-                    setColor(android.graphics.Color.parseColor("#1F192F")) // Dark translucent purple
-                    setStroke(2, android.graphics.Color.parseColor("#4C3B70")) // Border accent
-                }
-                background = shape
-                
                 val layoutParams = android.widget.LinearLayout.LayoutParams(
                     android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
-                    120 // height
+                    android.widget.LinearLayout.LayoutParams.WRAP_CONTENT
                 ).apply {
-                    setMargins(32, 6, 32, 6)
+                    setMargins(32, 0, 32, 48)
                 }
                 this.layoutParams = layoutParams
-                
-                setOnClickListener {
-                    if (index == q.correctIndex) {
-                        android.widget.Toast.makeText(
-                            applicationContext,
-                            "Correct! You unlocked a 5-minute study break! 🎓",
-                            android.widget.Toast.LENGTH_LONG
-                        ).show()
-                        prefManager.emergencyBypassUntil = System.currentTimeMillis() + (5 * 60 * 1000L)
-                        removeBlockerOverlay()
-                    } else {
-                        val currentHp = prefManager.mascotHp
-                        if (currentHp > 1) {
-                            prefManager.mascotHp = currentHp - 1
-                            android.widget.Toast.makeText(
-                                applicationContext,
-                                "Incorrect! Hooty took 1 damage. HP: ${currentHp - 1}/3",
-                                android.widget.Toast.LENGTH_LONG
-                            ).show()
-                        } else {
-                            prefManager.mascotHp = 0
-                            prefManager.streak = 0
-                            android.widget.Toast.makeText(
-                                applicationContext,
-                                "Hooty fainted! Streak reset to 0.",
-                                android.widget.Toast.LENGTH_LONG
-                            ).show()
-                        }
-                        // Set/refresh cooldown block
-                        val pauseMillis = prefManager.pauseDurationSeconds * 1000L
-                        prefManager.blockUntilTimestamp = System.currentTimeMillis() + pauseMillis
+            }
+            layout.addView(alertMessage)
+        } else {
+            // Blocker Quiz Section
+            val challengeText = android.widget.TextView(this).apply {
+                text = "Answer this Focus Quiz to unlock a 5-minute break pass!"
+                textSize = 12f
+                setTextColor(android.graphics.Color.parseColor("#9CA3AF"))
+                gravity = android.view.Gravity.CENTER
+                val layoutParams = android.widget.LinearLayout.LayoutParams(
+                    android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
+                    android.widget.LinearLayout.LayoutParams.WRAP_CONTENT
+                ).apply {
+                    setMargins(0, 0, 0, 16)
+                }
+                this.layoutParams = layoutParams
+            }
+            layout.addView(challengeText)
 
-                        // Redirect home immediately
-                        val homeIntent = Intent(Intent.ACTION_MAIN).apply {
-                            addCategory(Intent.CATEGORY_HOME)
-                            flags = Intent.FLAG_ACTIVITY_NEW_TASK
+            val q = getBlockerQuestion()
+            val qText = android.widget.TextView(this).apply {
+                text = q.question
+                textSize = 16f
+                setTextColor(android.graphics.Color.WHITE)
+                gravity = android.view.Gravity.CENTER
+                val layoutParams = android.widget.LinearLayout.LayoutParams(
+                    android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
+                    android.widget.LinearLayout.LayoutParams.WRAP_CONTENT
+                ).apply {
+                    setMargins(16, 0, 16, 24)
+                }
+                this.layoutParams = layoutParams
+            }
+            layout.addView(qText)
+
+            q.options.forEachIndexed { index, option ->
+                val btn = android.widget.Button(this).apply {
+                    text = option
+                    setTextColor(android.graphics.Color.WHITE)
+                    textSize = 13f
+                    gravity = android.view.Gravity.CENTER
+                    
+                    val shape = android.graphics.drawable.GradientDrawable().apply {
+                        shape = android.graphics.drawable.GradientDrawable.RECTANGLE
+                        cornerRadius = 16f
+                        setColor(android.graphics.Color.parseColor("#1F192F")) // Dark translucent purple
+                        setStroke(2, android.graphics.Color.parseColor("#4C3B70")) // Border accent
+                    }
+                    background = shape
+                    
+                    val layoutParams = android.widget.LinearLayout.LayoutParams(
+                        android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
+                        120 // height
+                    ).apply {
+                        setMargins(32, 6, 32, 6)
+                    }
+                    this.layoutParams = layoutParams
+                    
+                    setOnClickListener {
+                        if (index == q.correctIndex) {
+                            android.widget.Toast.makeText(
+                                applicationContext,
+                                "Correct! You unlocked a 5-minute study break! 🎓",
+                                android.widget.Toast.LENGTH_LONG
+                            ).show()
+                            prefManager.emergencyBypassUntil = System.currentTimeMillis() + (5 * 60 * 1000L)
+                            removeBlockerOverlay()
+                        } else {
+                            val currentHp = prefManager.mascotHp
+                            if (currentHp > 1) {
+                                prefManager.mascotHp = currentHp - 1
+                                android.widget.Toast.makeText(
+                                    applicationContext,
+                                    "Incorrect! Hooty took 1 damage. HP: ${currentHp - 1}/3",
+                                    android.widget.Toast.LENGTH_LONG
+                                ).show()
+                            } else {
+                                prefManager.mascotHp = 0
+                                prefManager.streak = 0
+                                android.widget.Toast.makeText(
+                                    applicationContext,
+                                    "Hooty fainted! Streak reset to 0.",
+                                    android.widget.Toast.LENGTH_LONG
+                                ).show()
+                            }
+                            // Set/refresh cooldown block
+                            val pauseMillis = prefManager.pauseDurationSeconds * 1000L
+                            prefManager.blockUntilTimestamp = System.currentTimeMillis() + pauseMillis
+
+                            // Redirect home immediately
+                            val homeIntent = Intent(Intent.ACTION_MAIN).apply {
+                                addCategory(Intent.CATEGORY_HOME)
+                                flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                            }
+                            startActivity(homeIntent)
+                            removeBlockerOverlay()
                         }
-                        startActivity(homeIntent)
-                        removeBlockerOverlay()
                     }
                 }
+                layout.addView(btn)
             }
-            layout.addView(btn)
         }
 
         // Give Up / Exit App Button
