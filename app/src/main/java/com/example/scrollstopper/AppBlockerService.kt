@@ -96,12 +96,7 @@ class AppBlockerService : Service() {
         
         val isAppBlocked = currentApp != null && blockedApps.contains(currentApp)
         
-        var isCoolDownBlocked = prefManager.isCurrentlyBlocked
-        val isBypassed = now < prefManager.emergencyBypassUntil
-        val inActiveStudyBlock = prefManager.customBlocks.any { block ->
-            !block.isCompleted && isTimeInBlock(block.timeRange)
-        }
-        val isFocusActive = (isCoolDownBlocked || prefManager.strictMode || inActiveStudyBlock) && !isBypassed
+        val isFocusActive = prefManager.isFocusActive
         val permissionsGranted = isUsageAccessGranted(this) && isOverlayGranted(this)
         
         val isSettingsBlocked = currentApp != null && settingsPackages.contains(currentApp) && isFocusActive && permissionsGranted
@@ -117,6 +112,10 @@ class AppBlockerService : Service() {
                 lastCheckedTime = now
                 
                 // In Non-Strict Mode, we track total accumulated time in blocked apps to simulate scroll limit (10s per unit)
+                val inActiveStudyBlock = prefManager.hasActiveStudyBlock
+                var isCoolDownBlocked = prefManager.isCurrentlyBlocked
+                val isBypassed = now < prefManager.emergencyBypassUntil
+                
                 if (!prefManager.strictMode && !inActiveStudyBlock && !isCoolDownBlocked && !isBypassed) {
                     val limitMs = prefManager.scrollLimit * 10000L // 10s per scroll unit (e.g. 3 limit = 30 seconds)
                     Log.i(TAG, "Accumulated blocked app usage: ${accumulatedBlockedTimeMs / 1000}s / ${limitMs / 1000}s limit")
@@ -128,7 +127,6 @@ class AppBlockerService : Service() {
                         prefManager.blockUntilTimestamp = now + pauseMillis
                         prefManager.totalBlocksToday += 1
                         prefManager.timeSavedMinutes += 15 // Estimate 15 minutes saved
-                        isCoolDownBlocked = true // Force immediately to block on this pass
                         accumulatedBlockedTimeMs = 0L
                     }
                 } else {
@@ -142,8 +140,8 @@ class AppBlockerService : Service() {
             
             // Block if:
             // 1. Settings blocker condition is true
-            // 2. Standard app blocker condition is true
-            val shouldShowOverlay = isSettingsBlocked || ((isCoolDownBlocked || prefManager.strictMode || inActiveStudyBlock) && !isBypassed)
+            // 2. Standard app blocker condition is true (focus is active)
+            val shouldShowOverlay = isSettingsBlocked || isFocusActive
             
             if (shouldShowOverlay) {
                 Log.i(TAG, "Blocking active foreground application: $currentApp")
@@ -165,11 +163,9 @@ class AppBlockerService : Service() {
                 accumulatedBlockedTimeMs = 0L
             }
             
-            // Remove the overlay if they exit the blocked app and are on any allowed app (not our own)
-            if (currentApp != packageName) {
-                handler.post {
-                    removeBlockerOverlay()
-                }
+            // Remove the overlay if they exit the blocked app and are on any allowed app (including our own)
+            handler.post {
+                removeBlockerOverlay()
             }
         }
     }
@@ -438,44 +434,6 @@ class AppBlockerService : Service() {
         } catch (e: Exception) {
             Log.e(TAG, "Error removing blocker overlay: ${e.message}", e)
         }
-    }
-
-    private fun isTimeInBlock(timeRange: String): Boolean {
-        val parts = timeRange.split("-")
-        if (parts.size != 2) return false
-        val start = parseTime(parts[0].trim()) ?: return false
-        val end = parseTime(parts[1].trim()) ?: return false
-        
-        val nowCalendar = Calendar.getInstance()
-        val nowMinutes = nowCalendar.get(Calendar.HOUR_OF_DAY) * 60 + nowCalendar.get(Calendar.MINUTE)
-        
-        return if (start <= end) {
-            nowMinutes in start..end
-        } else {
-            nowMinutes >= start || nowMinutes <= end
-        }
-    }
-
-    private fun parseTime(timeStr: String): Int? {
-        val clean = timeStr.uppercase().trim()
-        val isPM = clean.contains("PM")
-        val isAM = clean.contains("AM")
-        val timeParts = clean.replace("AM", "").replace("PM", "").trim().split(":")
-        if (timeParts.isEmpty()) return null
-        
-        var hour = timeParts[0].toIntOrNull() ?: return null
-        var minute = 0
-        if (timeParts.size > 1) {
-            minute = timeParts[1].toIntOrNull() ?: 0
-        }
-        
-        if (isPM && hour < 12) {
-            hour += 12
-        } else if (isAM && hour == 12) {
-            hour = 0
-        }
-        
-        return hour * 60 + minute
     }
 
     private fun getForegroundPackageName(): String? {

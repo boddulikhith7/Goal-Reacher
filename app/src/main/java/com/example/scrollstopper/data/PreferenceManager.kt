@@ -488,4 +488,55 @@ class PreferenceManager(private val context: Context) {
             val serialized = value.joinToString("::") { it.serialize() }
             prefs.edit().putString("blocker_quiz_pool", serialized).apply()
         }
+
+    fun isTimeInBlock(timeRange: String): Boolean {
+        val parts = timeRange.split("-")
+        if (parts.size != 2) return false
+        val start = parseTime(parts[0].trim()) ?: return false
+        val end = parseTime(parts[1].trim()) ?: return false
+        
+        val nowCalendar = Calendar.getInstance()
+        val nowMinutes = nowCalendar.get(Calendar.HOUR_OF_DAY) * 60 + nowCalendar.get(Calendar.MINUTE)
+        
+        return if (start <= end) {
+            nowMinutes in start..end
+        } else {
+            nowMinutes >= start || nowMinutes <= end
+        }
+    }
+
+    private fun parseTime(timeStr: String): Int? {
+        val clean = timeStr.uppercase().trim()
+        val isPM = clean.contains("PM")
+        val isAM = clean.contains("AM")
+        val timeParts = clean.replace("AM", "").replace("PM", "").trim().split(":")
+        if (timeParts.isEmpty()) return null
+        
+        var hour = timeParts[0].toIntOrNull() ?: return null
+        var minute = 0
+        if (timeParts.size > 1) {
+            minute = timeParts[1].toIntOrNull() ?: 0
+        }
+        
+        if (isPM && hour < 12) {
+            hour += 12
+        } else if (isAM && hour == 12) {
+            hour = 0
+        }
+        
+        return hour * 60 + minute
+    }
+
+    val hasActiveStudyBlock: Boolean
+        get() = customBlocks.any { block ->
+            !block.isCompleted && isTimeInBlock(block.timeRange)
+        }
+
+    val isFocusActive: Boolean
+        get() {
+            val now = System.currentTimeMillis()
+            val isCoolDownBlocked = isCurrentlyBlocked
+            val isBypassed = now < emergencyBypassUntil
+            return (isCoolDownBlocked || strictMode || hasActiveStudyBlock) && !isBypassed
+        }
 }

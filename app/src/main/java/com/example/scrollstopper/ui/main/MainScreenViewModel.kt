@@ -37,7 +37,8 @@ data class MainUiState(
     val customBlocks: List<TimetableBlock> = emptyList(),
     val mascotHp: Int = 3,
     val flashcards: List<com.example.scrollstopper.data.Flashcard> = emptyList(),
-    val blockerQuizPool: List<com.example.scrollstopper.data.BlockerQuizQuestion> = emptyList()
+    val blockerQuizPool: List<com.example.scrollstopper.data.BlockerQuizQuestion> = emptyList(),
+    val isFocusActive: Boolean = false
 )
 
 class MainScreenViewModel(application: Application) : AndroidViewModel(application) {
@@ -89,7 +90,8 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
                 customBlocks = prefManager.customBlocks,
                 mascotHp = prefManager.mascotHp,
                 flashcards = prefManager.flashcards,
-                blockerQuizPool = prefManager.blockerQuizPool
+                blockerQuizPool = prefManager.blockerQuizPool,
+                isFocusActive = prefManager.isFocusActive
             )
         }
     }
@@ -140,20 +142,19 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
     }
 
     fun updateScrollLimit(limit: Int) {
-        // Prevent editing during active block in Strict Mode
-        if (prefManager.strictMode && prefManager.isCurrentlyBlocked) return
+        if (prefManager.isFocusActive) return
         prefManager.scrollLimit = limit
         refreshState()
     }
 
     fun updatePauseDuration(seconds: Int) {
-        if (prefManager.strictMode && prefManager.isCurrentlyBlocked) return
+        if (prefManager.isFocusActive) return
         prefManager.pauseDurationSeconds = seconds
         refreshState()
     }
 
     fun toggleStrictMode(enabled: Boolean) {
-        if (prefManager.strictMode && prefManager.isCurrentlyBlocked) return
+        if (prefManager.isFocusActive) return
         prefManager.strictMode = enabled
         refreshState()
     }
@@ -169,16 +170,19 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
     }
 
     fun addTimetableBlock(label: String, timeRange: String, xp: Int) {
+        if (prefManager.isFocusActive) return
         prefManager.addTimetableBlock(label, timeRange, xp)
         refreshState()
     }
 
     fun deleteTimetableBlock(id: String) {
+        if (prefManager.isFocusActive) return
         prefManager.deleteTimetableBlock(id)
         refreshState()
     }
 
     fun updateTimetableBlock(id: String, label: String, timeRange: String, xp: Int) {
+        if (prefManager.isFocusActive) return
         prefManager.updateTimetableBlock(id, label, timeRange, xp)
         refreshState()
     }
