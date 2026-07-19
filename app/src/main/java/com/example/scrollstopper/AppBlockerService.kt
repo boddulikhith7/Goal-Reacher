@@ -129,13 +129,6 @@ class AppBlockerService : Service() {
             if ((isCoolDownBlocked || prefManager.strictMode || inActiveStudyBlock) && !isBypassed) {
                 Log.i(TAG, "Blocking active foreground application: $currentApp")
                 
-                // Instantly redirect to Home screen to send YouTube/Instagram to the background and stop playback
-                val homeIntent = Intent(Intent.ACTION_MAIN).apply {
-                    addCategory(Intent.CATEGORY_HOME)
-                    flags = Intent.FLAG_ACTIVITY_NEW_TASK
-                }
-                startActivity(homeIntent)
-
                 handler.post {
                     showBlockerOverlay(currentApp)
                 }
@@ -241,32 +234,127 @@ class AppBlockerService : Service() {
         }
         layout.addView(quoteText)
 
-        // Exit Button - Dynamically adjusts label to the blocked app
         val appLabel = if (currentApp.contains("instagram")) "Instagram" else "YouTube"
-        val exitButton = android.widget.Button(this).apply {
-            text = "Exit $appLabel"
-            setTextColor(android.graphics.Color.WHITE)
+
+        // Blocker Quiz Section
+        val challengeText = android.widget.TextView(this).apply {
+            text = "Answer this Focus Quiz to unlock a 5-minute break pass!"
+            textSize = 12f
+            setTextColor(android.graphics.Color.parseColor("#9CA3AF"))
+            gravity = android.view.Gravity.CENTER
+            val layoutParams = android.widget.LinearLayout.LayoutParams(
+                android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
+                android.widget.LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                setMargins(0, 0, 0, 16)
+            }
+            this.layoutParams = layoutParams
+        }
+        layout.addView(challengeText)
+
+        val q = getBlockerQuestion()
+        val qText = android.widget.TextView(this).apply {
+            text = q.question
             textSize = 16f
+            setTextColor(android.graphics.Color.WHITE)
+            gravity = android.view.Gravity.CENTER
+            val layoutParams = android.widget.LinearLayout.LayoutParams(
+                android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
+                android.widget.LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                setMargins(16, 0, 16, 24)
+            }
+            this.layoutParams = layoutParams
+        }
+        layout.addView(qText)
+
+        q.options.forEachIndexed { index, option ->
+            val btn = android.widget.Button(this).apply {
+                text = option
+                setTextColor(android.graphics.Color.WHITE)
+                textSize = 13f
+                gravity = android.view.Gravity.CENTER
+                
+                val shape = android.graphics.drawable.GradientDrawable().apply {
+                    shape = android.graphics.drawable.GradientDrawable.RECTANGLE
+                    cornerRadius = 16f
+                    setColor(android.graphics.Color.parseColor("#1F192F")) // Dark translucent purple
+                    setStroke(2, android.graphics.Color.parseColor("#4C3B70")) // Border accent
+                }
+                background = shape
+                
+                val layoutParams = android.widget.LinearLayout.LayoutParams(
+                    android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
+                    120 // height
+                ).apply {
+                    setMargins(32, 6, 32, 6)
+                }
+                this.layoutParams = layoutParams
+                
+                setOnClickListener {
+                    if (index == q.correctIndex) {
+                        android.widget.Toast.makeText(
+                            applicationContext,
+                            "Correct! You unlocked a 5-minute study break! 🎓",
+                            android.widget.Toast.LENGTH_LONG
+                        ).show()
+                        prefManager.emergencyBypassUntil = System.currentTimeMillis() + (5 * 60 * 1000L)
+                        removeBlockerOverlay()
+                    } else {
+                        val currentHp = prefManager.mascotHp
+                        if (currentHp > 1) {
+                            prefManager.mascotHp = currentHp - 1
+                            android.widget.Toast.makeText(
+                                applicationContext,
+                                "Incorrect! Hooty took 1 damage. HP: ${currentHp - 1}/3",
+                                android.widget.Toast.LENGTH_LONG
+                            ).show()
+                        } else {
+                            prefManager.mascotHp = 0
+                            prefManager.streak = 0
+                            android.widget.Toast.makeText(
+                                applicationContext,
+                                "Hooty fainted! Streak reset to 0.",
+                                android.widget.Toast.LENGTH_LONG
+                            ).show()
+                        }
+                        // Redirect home immediately
+                        val homeIntent = Intent(Intent.ACTION_MAIN).apply {
+                            addCategory(Intent.CATEGORY_HOME)
+                            flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                        }
+                        startActivity(homeIntent)
+                        removeBlockerOverlay()
+                    }
+                }
+            }
+            layout.addView(btn)
+        }
+
+        // Give Up / Exit App Button
+        val giveUpButton = android.widget.Button(this).apply {
+            text = "Give Up & Exit $appLabel"
+            setTextColor(android.graphics.Color.parseColor("#9CA3AF"))
+            textSize = 13f
             gravity = android.view.Gravity.CENTER
             
-            // Set background color using dynamic gradient with rounded corners
             val shape = android.graphics.drawable.GradientDrawable().apply {
                 shape = android.graphics.drawable.GradientDrawable.RECTANGLE
-                cornerRadius = 24f
-                setColor(android.graphics.Color.parseColor("#8B5CF6")) // Accent purple button
+                cornerRadius = 16f
+                setColor(android.graphics.Color.TRANSPARENT)
+                setStroke(2, android.graphics.Color.parseColor("#4B5563")) // Gray border
             }
             background = shape
             
             val layoutParams = android.widget.LinearLayout.LayoutParams(
                 android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
-                144 // ~48dp height in pixels
+                110
             ).apply {
-                setMargins(48, 0, 48, 0)
+                setMargins(32, 20, 32, 0)
             }
             this.layoutParams = layoutParams
             
             setOnClickListener {
-                // Redirect to home screen
                 val homeIntent = Intent(Intent.ACTION_MAIN).apply {
                     addCategory(Intent.CATEGORY_HOME)
                     flags = Intent.FLAG_ACTIVITY_NEW_TASK
@@ -275,7 +363,7 @@ class AppBlockerService : Service() {
                 removeBlockerOverlay()
             }
         }
-        layout.addView(exitButton)
+        layout.addView(giveUpButton)
 
         try {
             windowManager.addView(layout, params)
@@ -372,6 +460,43 @@ class AppBlockerService : Service() {
             }
         }
         return latestApp
+    }
+
+    private fun getBlockerQuestion(): com.example.scrollstopper.data.BlockerQuizQuestion {
+        val pool = prefManager.blockerQuizPool
+        if (pool.isNotEmpty()) {
+            return pool.random()
+        }
+        
+        // Dynamic offline fallback questions (High quality EEE / CSE topics)
+        val defaultQuestions = listOf(
+            com.example.scrollstopper.data.BlockerQuizQuestion(
+                "Which theorem is used to find the equivalent voltage source and series resistance?",
+                listOf("Norton's Theorem", "Thevenin's Theorem", "Superposition Theorem"),
+                1
+            ),
+            com.example.scrollstopper.data.BlockerQuizQuestion(
+                "What is the power factor of a purely capacitive circuit?",
+                listOf("Zero leading", "Zero lagging", "Unity"),
+                0
+            ),
+            com.example.scrollstopper.data.BlockerQuizQuestion(
+                "In an Operational Amplifier, what is the ideal input impedance?",
+                listOf("Zero", "One", "Infinite"),
+                2
+            ),
+            com.example.scrollstopper.data.BlockerQuizQuestion(
+                "Which damping technique is commonly used in moving coil instruments?",
+                listOf("Air friction", "Eddy current", "Fluid friction"),
+                1
+            ),
+            com.example.scrollstopper.data.BlockerQuizQuestion(
+                "What does a P-N junction diode conduct when forward biased?",
+                listOf("Majority carriers", "Minority carriers", "Neither"),
+                0
+            )
+        )
+        return defaultQuestions.random()
     }
 
     private fun startForegroundServiceNotification() {
