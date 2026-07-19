@@ -44,13 +44,20 @@ class AppBlockerService : Service() {
     private val checkInterval = 1000L // 1 second
     private var overlayView: android.view.View? = null
     private var youtubeTimeStarted: Long = 0L
-    private var accumulatedBlockedTimeMs: Long = 0L
+    private var accumulatedBlockedTimeMs: Long
+        get() = prefManager.accumulatedBlockedTimeMs
+        set(value) {
+            prefManager.accumulatedBlockedTimeMs = value
+        }
     private var lastActiveTime: Long = 0L
     private var lastCheckedTime: Long = 0L
 
     private val checkRunnable = object : Runnable {
         override fun run() {
             checkForegroundApp()
+            if (overlayView != null) {
+                requestAudioFocusInterception()
+            }
             handler.postDelayed(this, checkInterval)
         }
     }
@@ -158,11 +165,6 @@ class AppBlockerService : Service() {
             // User is not in a blocked app
             lastCheckedTime = 0L
             
-            // If they have been away from blocked apps for more than 5 seconds, reset the accumulated timer
-            if (now - lastActiveTime > 5000L) {
-                accumulatedBlockedTimeMs = 0L
-            }
-            
             // Remove the overlay if they exit the blocked app and are on any allowed app (including our own)
             handler.post {
                 removeBlockerOverlay()
@@ -190,19 +192,7 @@ class AppBlockerService : Service() {
         )
 
         // Request Audio Focus to instantly pause YouTube audio/video playback
-        val audioManager = getSystemService(Context.AUDIO_SERVICE) as android.media.AudioManager
-        try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                val focusRequest = android.media.AudioFocusRequest.Builder(android.media.AudioManager.AUDIOFOCUS_GAIN_TRANSIENT)
-                    .build()
-                audioManager.requestAudioFocus(focusRequest)
-            } else {
-                @Suppress("DEPRECATION")
-                audioManager.requestAudioFocus(null, android.media.AudioManager.STREAM_MUSIC, android.media.AudioManager.AUDIOFOCUS_GAIN_TRANSIENT)
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to request audio focus: ${e.message}")
-        }
+        requestAudioFocusInterception()
 
         // Create standard LinearLayout layout programmatically
         val layout = android.widget.LinearLayout(this).apply {
@@ -340,6 +330,7 @@ class AppBlockerService : Service() {
                                 android.widget.Toast.LENGTH_LONG
                             ).show()
                             prefManager.emergencyBypassUntil = System.currentTimeMillis() + (5 * 60 * 1000L)
+                            prefManager.accumulatedBlockedTimeMs = 0L
                             removeBlockerOverlay()
                         } else {
                             val currentHp = prefManager.mascotHp
@@ -433,6 +424,26 @@ class AppBlockerService : Service() {
             Log.i(TAG, "Blocker overlay removed from WindowManager successfully.")
         } catch (e: Exception) {
             Log.e(TAG, "Error removing blocker overlay: ${e.message}", e)
+        }
+    }
+
+    private fun requestAudioFocusInterception() {
+        val audioManager = getSystemService(Context.AUDIO_SERVICE) as android.media.AudioManager
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                val focusRequest = android.media.AudioFocusRequest.Builder(android.media.AudioManager.AUDIOFOCUS_GAIN_TRANSIENT)
+                    .build()
+                audioManager.requestAudioFocus(focusRequest)
+            } else {
+                @Suppress("DEPRECATION")
+                audioManager.requestAudioFocus(
+                    null,
+                    android.media.AudioManager.STREAM_MUSIC,
+                    android.media.AudioManager.AUDIOFOCUS_GAIN_TRANSIENT
+                )
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to request audio focus: ${e.message}")
         }
     }
 

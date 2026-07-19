@@ -91,7 +91,7 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
                 mascotHp = prefManager.mascotHp,
                 flashcards = prefManager.flashcards,
                 blockerQuizPool = prefManager.blockerQuizPool,
-                isFocusActive = prefManager.isFocusActive
+                isFocusActive = prefManager.isSettingsLocked
             )
         }
     }
@@ -142,19 +142,19 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
     }
 
     fun updateScrollLimit(limit: Int) {
-        if (prefManager.isFocusActive) return
+        if (prefManager.isSettingsLocked) return
         prefManager.scrollLimit = limit
         refreshState()
     }
 
     fun updatePauseDuration(seconds: Int) {
-        if (prefManager.isFocusActive) return
+        if (prefManager.isSettingsLocked) return
         prefManager.pauseDurationSeconds = seconds
         refreshState()
     }
 
     fun toggleStrictMode(enabled: Boolean) {
-        if (prefManager.isFocusActive) return
+        if (prefManager.isSettingsLocked) return
         prefManager.strictMode = enabled
         refreshState()
     }
@@ -170,19 +170,19 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
     }
 
     fun addTimetableBlock(label: String, timeRange: String, xp: Int) {
-        if (prefManager.isFocusActive) return
+        if (prefManager.isSettingsLocked) return
         prefManager.addTimetableBlock(label, timeRange, xp)
         refreshState()
     }
 
     fun deleteTimetableBlock(id: String) {
-        if (prefManager.isFocusActive) return
+        if (prefManager.isSettingsLocked) return
         prefManager.deleteTimetableBlock(id)
         refreshState()
     }
 
     fun updateTimetableBlock(id: String, label: String, timeRange: String, xp: Int) {
-        if (prefManager.isFocusActive) return
+        if (prefManager.isSettingsLocked) return
         prefManager.updateTimetableBlock(id, label, timeRange, xp)
         refreshState()
     }

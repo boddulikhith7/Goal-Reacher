@@ -462,6 +462,7 @@ class PreferenceManager(private val context: Context) {
         if (currentXp >= 50) {
             xp = currentXp - 50
             emergencyBypassUntil = System.currentTimeMillis() + (5 * 60 * 1000) // 5 minutes
+            accumulatedBlockedTimeMs = 0L
             return true
         }
         return false
@@ -532,11 +533,26 @@ class PreferenceManager(private val context: Context) {
             !block.isCompleted && isTimeInBlock(block.timeRange)
         }
 
-    val isFocusActive: Boolean
+    var accumulatedBlockedTimeMs: Long
+        get() = prefs.getLong("accumulated_blocked_time_ms", 0L)
+        set(value) = prefs.edit().putLong("accumulated_blocked_time_ms", value).apply()
+
+    val isAppBlockingActive: Boolean
         get() {
             val now = System.currentTimeMillis()
             val isCoolDownBlocked = isCurrentlyBlocked
             val isBypassed = now < emergencyBypassUntil
             return (isCoolDownBlocked || strictMode || hasActiveStudyBlock) && !isBypassed
         }
+
+    val isSettingsLocked: Boolean
+        get() {
+            val now = System.currentTimeMillis()
+            val isCoolDownBlocked = isCurrentlyBlocked
+            val isBypassed = now < emergencyBypassUntil
+            return (isCoolDownBlocked || hasActiveStudyBlock) && !isBypassed
+        }
+
+    val isFocusActive: Boolean
+        get() = isAppBlockingActive
 }
