@@ -326,6 +326,10 @@ class AppBlockerService : Service() {
                                 android.widget.Toast.LENGTH_LONG
                             ).show()
                         }
+                        // Set/refresh cooldown block
+                        val pauseMillis = prefManager.pauseDurationSeconds * 1000L
+                        prefManager.blockUntilTimestamp = System.currentTimeMillis() + pauseMillis
+
                         // Redirect home immediately
                         val homeIntent = Intent(Intent.ACTION_MAIN).apply {
                             addCategory(Intent.CATEGORY_HOME)
@@ -363,6 +367,10 @@ class AppBlockerService : Service() {
             this.layoutParams = layoutParams
             
             setOnClickListener {
+                // Set/refresh cooldown block
+                val pauseMillis = prefManager.pauseDurationSeconds * 1000L
+                prefManager.blockUntilTimestamp = System.currentTimeMillis() + pauseMillis
+
                 val homeIntent = Intent(Intent.ACTION_MAIN).apply {
                     addCategory(Intent.CATEGORY_HOME)
                     flags = Intent.FLAG_ACTIVITY_NEW_TASK
@@ -384,10 +392,10 @@ class AppBlockerService : Service() {
 
     private fun removeBlockerOverlay() {
         val view = overlayView ?: return
+        overlayView = null // Reset immediately to prevent concurrency duplicate-call locks
         val windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
         try {
             windowManager.removeView(view)
-            overlayView = null
             Log.i(TAG, "Blocker overlay removed from WindowManager successfully.")
         } catch (e: Exception) {
             Log.e(TAG, "Error removing blocker overlay: ${e.message}", e)
