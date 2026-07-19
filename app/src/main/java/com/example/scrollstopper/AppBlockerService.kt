@@ -44,6 +44,9 @@ class AppBlockerService : Service() {
     private val checkInterval = 1000L // 1 second
     private var overlayView: android.view.View? = null
     private var youtubeTimeStarted: Long = 0L
+    private var accumulatedBlockedTimeMs: Long = 0L
+    private var lastActiveTime: Long = 0L
+    private var lastCheckedTime: Long = 0L
 
     private val checkRunnable = object : Runnable {
         override fun run() {
@@ -81,47 +84,47 @@ class AppBlockerService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     private fun checkForegroundApp() {
-        val currentApp = getForegroundPackageName() ?: return
-        Log.i(TAG, "Foreground Check: detectedApp=$currentApp | strictMode=${prefManager.strictMode} | isBlocked=${prefManager.isCurrentlyBlocked}")
-
-        // Targeted apps to block: YouTube and Instagram
+        val currentApp = getForegroundPackageName()
+        val now = System.currentTimeMillis()
+        
         val blockedApps = listOf("com.google.android.youtube", "com.instagram.android")
-
-        if (blockedApps.contains(currentApp)) {
-            val now = System.currentTimeMillis()
-            val isCoolDownBlocked = prefManager.isCurrentlyBlocked
+        val isAppBlocked = currentApp != null && blockedApps.contains(currentApp)
+        
+        if (isAppBlocked) {
+            lastActiveTime = now
+            
+            if (lastCheckedTime > 0L) {
+                val elapsed = now - lastCheckedTime
+                accumulatedBlockedTimeMs += elapsed
+            }
+            lastCheckedTime = now
+            
+            var isCoolDownBlocked = prefManager.isCurrentlyBlocked
             val isBypassed = now < prefManager.emergencyBypassUntil
-
-            // Determine if we are currently inside an active, uncompleted study block
             val inActiveStudyBlock = prefManager.customBlocks.any { block ->
                 !block.isCompleted && isTimeInBlock(block.timeRange)
             }
-
-            // In Non-Strict Mode, we track time spent in blocked apps to simulate scroll limit (e.g., 10 seconds per scroll limit unit)
+            
+            // In Non-Strict Mode, we track total accumulated time in blocked apps to simulate scroll limit (10s per unit)
             if (!prefManager.strictMode && !inActiveStudyBlock && !isCoolDownBlocked && !isBypassed) {
-                if (youtubeTimeStarted == 0L) {
-                    youtubeTimeStarted = now
-                    Log.i(TAG, "User opened blocked app: $currentApp. Timer started.")
-                } else {
-                    val timeSpentMs = now - youtubeTimeStarted
-                    val limitMs = prefManager.scrollLimit * 10000L // 10s per scroll unit (e.g. 3 limit = 30 seconds)
-                    Log.i(TAG, "App usage for $currentApp: ${timeSpentMs / 1000}s / ${limitMs / 1000}s limit")
-                    
-                    if (timeSpentMs >= limitMs) {
-                        Log.i(TAG, "Usage limit reached! Triggering cooldown block.")
-                        // Activate cooldown block
-                        val pauseMillis = prefManager.pauseDurationSeconds * 1000L
-                        prefManager.blockUntilTimestamp = now + pauseMillis
-                        prefManager.totalBlocksToday += 1
-                        prefManager.timeSavedMinutes += 15 // Estimate 15 minutes saved
-                        youtubeTimeStarted = 0L
-                    }
+                val limitMs = prefManager.scrollLimit * 10000L // 10s per scroll unit (e.g. 3 limit = 30 seconds)
+                Log.i(TAG, "Accumulated blocked app usage: ${accumulatedBlockedTimeMs / 1000}s / ${limitMs / 1000}s limit")
+                
+                if (accumulatedBlockedTimeMs >= limitMs) {
+                    Log.i(TAG, "Usage limit reached! Triggering cooldown block.")
+                    // Activate cooldown block
+                    val pauseMillis = prefManager.pauseDurationSeconds * 1000L
+                    prefManager.blockUntilTimestamp = now + pauseMillis
+                    prefManager.totalBlocksToday += 1
+                    prefManager.timeSavedMinutes += 15 // Estimate 15 minutes saved
+                    isCoolDownBlocked = true // Force immediately to block on this pass
+                    accumulatedBlockedTimeMs = 0L
                 }
             } else {
-                // Reset timer when blocked by study time/cooldown or strict mode is active
-                youtubeTimeStarted = 0L
+                // Reset accumulated timer when blocked by study time/cooldown or strict mode is active
+                accumulatedBlockedTimeMs = 0L
             }
-
+            
             // Block if:
             // 1. We are in a cool-down block
             // 2. Strict Mode is enabled
@@ -138,8 +141,13 @@ class AppBlockerService : Service() {
                 }
             }
         } else {
-            // Reset timer if they exit YouTube/Instagram
-            youtubeTimeStarted = 0L
+            // User is not in a blocked app
+            lastCheckedTime = 0L
+            
+            // If they have been away from blocked apps for more than 5 seconds, reset the accumulated timer
+            if (now - lastActiveTime > 5000L) {
+                accumulatedBlockedTimeMs = 0L
+            }
             
             // Remove the overlay if they exit the blocked app and are on any allowed app (not our own)
             if (currentApp != packageName) {
